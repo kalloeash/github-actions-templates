@@ -36,11 +36,18 @@ required permissions, and a copy-paste example.
 |-------|---------|
 | [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
 
-## Versioning
+## Versioning and releases
 
-Releases follow semver. A moving major tag (`v1`) tracks the latest release in that major
-line. Third-party actions used inside blocks are pinned to a full commit SHA and refreshed
-through Dependabot.
+Releases follow semver. A moving major tag (`vN`) tracks the latest release in that major
+line, so consumers on `@vN` pick up compatible fixes without editing their caller files.
+During `0.x`, pin an exact `@vX.Y.Z` or a commit SHA. Published release tags are immutable.
+
+The changelog is generated from Conventional Commit messages with
+[git-cliff](https://git-cliff.org) and published as the notes on each GitHub Release. See
+[docs/releasing.md](docs/releasing.md) for how a release is cut.
+
+Third-party actions used inside blocks are pinned to a full commit SHA and refreshed through
+Dependabot.
 
 ## Contributing
 

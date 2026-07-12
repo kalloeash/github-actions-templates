@@ -1,0 +1,45 @@
+# Internal release workflow. On a vX.Y.Z tag push it builds release notes from the
+# Conventional Commits with git-cliff, publishes an immutable GitHub Release, and moves the
+# floating major tag (for example v0) to the released commit. The floating major carries no
+# release of its own, so it stays movable. Not consumable by other repositories.
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install git-cliff
+        run: |
+          curl -sSfL https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz \
+            | sudo tar -xz --strip-components=1 -C /usr/local/bin git-cliff-2.13.1/git-cliff
+      - name: Build release notes
+        run: git-cliff --config cliff.toml --latest --strip header --output RELEASE_NOTES.md
+      - name: Publish release
+        run: gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
+      - name: Move floating major tag
+        run: |
+          MAJOR="v$(printf '%s' "${TAG#v}" | cut -d. -f1)"
+          if gh api "repos/$REPO/git/refs/tags/$MAJOR" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$REPO/git/refs/tags/$MAJOR" -f sha="$SHA" -F force=true >/dev/null
+          else
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null
+          fi
+          echo "moved $MAJOR to $SHA"
