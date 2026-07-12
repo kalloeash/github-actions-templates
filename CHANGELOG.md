@@ -38,5 +38,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initialize repository
 - Repository foundation (#1)
 - Prefix security scanners and group the catalog by category (#8)
-
-
