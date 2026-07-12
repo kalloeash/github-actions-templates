@@ -37,7 +37,10 @@ jobs:
       - name: Move floating major tag
         run: |
           MAJOR="v$(printf '%s' "${TAG#v}" | cut -d. -f1)"
-          if gh api "repos/$REPO/git/refs/tags/$MAJOR" >/dev/null 2>&1; then
+          # Existence check uses the singular git/ref endpoint, which 404s when the tag is
+          # absent. The plural git/refs endpoint prefix-matches (v0 would match v0.1.0) and
+          # returns 200, which would wrongly route to the update path.
+          if gh api "repos/$REPO/git/ref/tags/$MAJOR" >/dev/null 2>&1; then
             gh api -X PATCH "repos/$REPO/git/refs/tags/$MAJOR" -f sha="$SHA" -F force=true >/dev/null
           else
             gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null
