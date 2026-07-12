@@ -1,0 +1,47 @@
+# Restore, build, and test a .NET solution or project in one job. Test runs against the
+# build output (--no-build), so the three steps are deliberately one job, not three.
+name: dotnet-build-and-test
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        description: SDK version passed to actions/setup-dotnet, for example "10.0.x".
+        type: string
+        default: "10.0.x"
+      solution:
+        description: Path to the solution or project to build. Empty builds the working directory.
+        type: string
+        default: ""
+      configuration:
+        description: Build configuration.
+        type: string
+        default: Release
+      working-directory:
+        description: Directory the dotnet commands run in.
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+      - name: Restore
+        run: dotnet restore ${{ inputs.solution }}
+      - name: Build
+        run: dotnet build ${{ inputs.solution }} -c ${{ inputs.configuration }} --no-restore
+      - name: Test
+        run: dotnet test ${{ inputs.solution }} -c ${{ inputs.configuration }} --no-build --logger trx

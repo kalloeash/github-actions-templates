@@ -34,7 +34,7 @@ required permissions, and a copy-paste example.
 
 | Block | Purpose |
 |-------|---------|
-| _none yet_ | Blocks land here as they are built. |
+| [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
 
 ## Versioning
 
