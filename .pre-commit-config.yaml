@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+
+  # actionlint, zizmor and gitleaks run the installed CLIs directly so they behave the
+  # same on Windows and on Linux CI. Requires actionlint, zizmor and gitleaks on PATH
+  # (see README, Contributing).
+  - repo: local
+    hooks:
+      - id: actionlint
+        name: actionlint
+        entry: actionlint
+        language: system
+        types: ["yaml"]
+        files: ^\.github/workflows/
+      - id: zizmor
+        name: zizmor
+        entry: zizmor
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+      - id: gitleaks
+        name: gitleaks
+        entry: gitleaks git --pre-commit --staged --redact --verbose
+        language: system
+        pass_filenames: false
