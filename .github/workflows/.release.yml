@@ -9,13 +9,21 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
-permissions:
-  contents: write
+permissions: {}
+
+# Two tags pushed close together must not interleave the floating-major move; queue them.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     name: release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # contents: write creates the GitHub Release and moves the floating major tag.
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
@@ -26,14 +34,25 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Checksum-verified against the value published with the release (git-cliff ships
+      # sha512), so a moved or tampered asset fails the job instead of running.
       - name: Install git-cliff
         run: |
-          curl -sSfL https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz \
-            | sudo tar -xz --strip-components=1 -C /usr/local/bin git-cliff-2.13.1/git-cliff
+          curl -sSfLo git-cliff.tar.gz https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
+          echo "e716cce3a07dda41b1e370d6afbd7a59eb3d4739509fb7856aeec8da2be28c0396584e29e106141c1a1c535c1827dbc1f60417524f5cfb1da9e11f700bd00f30  git-cliff.tar.gz" | sha512sum -c -
+          sudo tar -xzf git-cliff.tar.gz --strip-components=1 -C /usr/local/bin git-cliff-2.13.1/git-cliff
+          rm git-cliff.tar.gz
       - name: Build release notes
         run: git-cliff --config cliff.toml --latest --strip header --output RELEASE_NOTES.md
+      # Skip-if-exists makes a re-run of a partially failed workflow resume at the
+      # tag-move step instead of failing on the already-published release.
       - name: Publish release
-        run: gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists, skipping creation"
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file RELEASE_NOTES.md
+          fi
       - name: Move floating major tag
         run: |
           MAJOR="v$(printf '%s' "${TAG#v}" | cut -d. -f1)"

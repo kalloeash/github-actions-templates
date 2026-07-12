@@ -27,9 +27,12 @@ Conventional Commit messages with [git-cliff](https://git-cliff.org), configured
 3. Tag the resulting commit on `main` and push the tag:
 
    ```sh
-   git tag vX.Y.Z
+   git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
+
+   Version tags are annotated (`-a`), so `git tag -n` and tooling see a proper tag object.
+   The floating major tag is the only lightweight tag, moved by the release workflow.
 
 4. The [`.release.yml`](../.github/workflows/.release.yml) workflow runs on the tag. It
    builds the release notes with git-cliff, publishes an immutable GitHub Release, and moves

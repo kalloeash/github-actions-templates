@@ -22,12 +22,21 @@ jobs:
   pre-commit:
     name: pre-commit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       CONFIG: ${{ inputs.config }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      # Fail fast with a clear message. Without this a missing config yields an empty
+      # hashFiles cache key and a later, less obvious pre-commit error.
+      - name: Check the configuration exists
+        run: |
+          if [ ! -f "$CONFIG" ]; then
+            echo "::error::pre-commit configuration not found at '$CONFIG'."
+            exit 1
+          fi
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ inputs.python-version }}
@@ -39,5 +48,5 @@ jobs:
           restore-keys: pre-commit-${{ runner.os }}-
       - name: Run pre-commit
         run: |
-          pip install pre-commit
+          pip install pre-commit==4.6.0
           pre-commit run --all-files --show-diff-on-failure --config "$CONFIG"
