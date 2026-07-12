@@ -54,6 +54,7 @@ prefix rather than a folder.
 | Block | Purpose |
 |-------|---------|
 | [terraform-format-and-validate](docs/blocks/terraform-format-and-validate.md) | Check formatting and validate Terraform configuration. |
+| [terraform-lint](docs/blocks/terraform-lint.md) | Lint Terraform configuration with tflint. |
 
 ### Security
 
