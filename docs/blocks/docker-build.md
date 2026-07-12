@@ -49,8 +49,9 @@ jobs:
 
 ## Permissions
 
-`contents: read` to build. Pushing also needs `packages: write`, which the caller grants on
-the calling job. The registry login uses the automatic `GITHUB_TOKEN`.
+This block declares no permissions of its own; it inherits the caller's `GITHUB_TOKEN`. Grant
+`contents: read` to build (enough for `push: false`), and add `packages: write` on the calling
+job when `push: true`. The registry login uses the automatic `GITHUB_TOKEN`.
 
 ## Notes
 
