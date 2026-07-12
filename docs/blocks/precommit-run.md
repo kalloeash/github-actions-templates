@@ -6,10 +6,28 @@ environments cached on the config hash.
 
 ## Usage
 
+Add this file to the consuming repository at `.github/workflows/pr.yml`. It is complete as
+shown and runs the repository's hooks on every pull request:
+
+```yaml
+name: pr
+on:
+  pull_request:
+
+jobs:
+  pre-commit:
+    uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v1
+```
+
+Point at a non-default config or Python version when needed:
+
 ```yaml
 jobs:
   pre-commit:
     uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v1
+    with:
+      python-version: "3.13"
+      config: .pre-commit-config.yaml
 ```
 
 ## Inputs
@@ -27,5 +45,4 @@ Needs `contents: read` only.
 
 - Runs `pre-commit run --all-files`. The calling repository provides the pre-commit
   configuration and any tools its hooks need on PATH.
-- Uses pip directly rather than the upstream pre-commit action, which is in maintenance
-  mode.
+- Uses pip directly rather than the upstream pre-commit action, which is in maintenance mode.

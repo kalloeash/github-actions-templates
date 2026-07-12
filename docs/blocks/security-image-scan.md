@@ -7,7 +7,27 @@ catch newly disclosed CVEs in an already-published image.
 
 ## Usage
 
-Scan a pushed image and fail on CRITICAL or HIGH findings:
+Add this file to the consuming repository at `.github/workflows/image-scan.yml`. It is
+complete as shown and scans a published image every Monday morning, reporting findings to the
+Security tab. The calling job grants `security-events: write`:
+
+```yaml
+name: image-scan
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  image-scan:
+    permissions:
+      contents: read
+      security-events: write
+    uses: kalloeash/github-actions-templates/.github/workflows/security-image-scan.yml@v1
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/myapp:latest
+```
+
+Report without failing the workflow, and pull a private image by logging in first:
 
 ```yaml
 jobs:
@@ -17,16 +37,17 @@ jobs:
       security-events: write
     uses: kalloeash/github-actions-templates/.github/workflows/security-image-scan.yml@v1
     with:
-      image: ghcr.io/${{ github.repository_owner }}/myapp:1.2.3
+      image: ghcr.io/${{ github.repository_owner }}/myapp:latest
       registry: ghcr.io
+      exit-code: 0
 ```
 
 ## Inputs
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `image` | (required) | Image reference to scan. |
-| `severity` | `CRITICAL,HIGH` | Severities to report and fail on. |
+| `image` | (required) | Image reference to scan, for example `ghcr.io/owner/app:1.2.3`. |
+| `severity` | `CRITICAL,HIGH` | Comma-separated severities to report and fail on. |
 | `scanners` | `vuln` | Trivy scanners to run. |
 | `ignore-unfixed` | `false` | Ignore vulnerabilities that have no fix available. |
 | `exit-code` | `1` | Exit code when findings exist. `1` fails the build, `0` reports only. |

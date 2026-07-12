@@ -6,9 +6,14 @@ true (with tags) to publish on release.
 
 ## Usage
 
-Verify the build on a pull request:
+Verify the build on a pull request. Add this file at `.github/workflows/pr.yml`; it is
+complete as shown and builds the image without pushing:
 
 ```yaml
+name: pr
+on:
+  pull_request:
+
 jobs:
   image:
     uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v1
@@ -17,9 +22,16 @@ jobs:
       tags: myapp:pr-${{ github.event.number }}
 ```
 
-Push on release:
+Push on release. The calling job grants `packages: write`, and the release trigger and
+version stay in the caller:
 
 ```yaml
+name: release
+on:
+  push:
+    tags:
+      - "v*"
+
 jobs:
   image:
     permissions:
@@ -30,7 +42,7 @@ jobs:
       file: docker/Dockerfile
       push: true
       tags: |
-        ghcr.io/${{ github.repository_owner }}/myapp:1.2.3
+        ghcr.io/${{ github.repository_owner }}/myapp:${{ github.ref_name }}
         ghcr.io/${{ github.repository_owner }}/myapp:latest
 ```
 
@@ -59,5 +71,5 @@ job when `push: true`. The registry login uses the automatic `GITHUB_TOKEN`.
   logs in to the registry and pushes.
 - Release specifics such as the version and tag names stay in the caller; this block only
   takes the finished `tags`.
-- The Buildx layer cache uses the GitHub Actions cache, scoped to the calling repository
-  name by default.
+- The Buildx layer cache uses the GitHub Actions cache, scoped to the calling repository name
+  by default.

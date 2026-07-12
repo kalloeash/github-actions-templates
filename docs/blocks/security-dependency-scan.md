@@ -6,6 +6,26 @@ well as on pull requests. It needs a free NVD API key.
 
 ## Usage
 
+Add this file to the consuming repository at `.github/workflows/dependency-scan.yml`. It is
+complete as shown and runs on every pull request and every Monday morning, passing the NVD
+API key as a secret:
+
+```yaml
+name: dependency-scan
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  dependency-scan:
+    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v1
+    secrets:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+```
+
+Pass a suppression file to accept reviewed findings:
+
 ```yaml
 jobs:
   dependency-scan:
@@ -14,15 +34,6 @@ jobs:
       suppression: dependency-check-suppressions.xml
     secrets:
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-```
-
-Run it weekly by adding a schedule trigger to the caller workflow:
-
-```yaml
-on:
-  pull_request:
-  schedule:
-    - cron: "0 6 * * 1"
 ```
 
 ## Inputs
@@ -48,7 +59,6 @@ Needs `contents: read` only.
 
 ## Notes
 
-- The NVD database is cached with a weekly-rotating key, so most runs skip the full
-  download.
+- The NVD database is cached with a weekly-rotating key, so most runs skip the full download.
 - The scanner image is pinned by digest, not a floating tag.
 - The report is uploaded as the `dependency-check-report` artifact.
