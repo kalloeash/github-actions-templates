@@ -40,6 +40,7 @@ prefix rather than a folder.
 | Block | Purpose |
 |-------|---------|
 | [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
+| [node-build-and-test](docs/blocks/node-build-and-test.md) | Format-check, lint, type-check, test, and build a Node project. |
 
 ### Container
 
@@ -76,7 +77,7 @@ Dependabot.
 ## Contributing
 
 Changes go through a branch and a pull request; nothing is committed straight to `main`.
-Branch names use a `type/short-summary` shape, for example `feat/node-checks` or
+Branch names use a `type/short-summary` shape, for example `feat/node-build-and-test` or
 `chore/foundation`.
 
 Commit messages follow [Conventional Commits](https://www.conventionalcommits.org): a

@@ -1,0 +1,50 @@
+# Run the standard quality gate for a Node project in one job: format check, lint, type
+# check, unit test, and production build, in that order (cheapest checks first). One job,
+# like dotnet-build-and-test, so the run stops at the first failing check. Every Node
+# project in the fleet runs the same five checks; a project missing one of these npm
+# scripts fails here by design, which keeps the fleet's gates from drifting apart.
+name: node-build-and-test
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version passed to actions/setup-node, for example "24".
+        type: string
+        default: "24"
+      working-directory:
+        description: Directory the npm commands run in.
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: build and test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Format check
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Test
+        run: npm run test
+      - name: Build
+        run: npm run build
