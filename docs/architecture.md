@@ -23,13 +23,12 @@ composite action when it is steps inside a job.
 |------|----------|
 | `.github/workflows/` | Reusable workflow blocks, one file per block. GitHub requires these to be flat, so the file name carries the namespace, for example `dotnet-build-and-test.yml`. |
 | `actions/<name>/` | Composite actions, each with an `action.yml` and a README. |
-| `fixtures/` | Small sample projects the self-tests run the blocks against. |
 | `examples/` | Complete caller files to copy into a consuming repository. |
 | `docs/` | This documentation. |
 
-Workflows that are internal to the catalog, such as the self-tests and the release
-workflow, use a leading dot in the file name (`.test-<block>.yml`) so the public,
-consumable surface is easy to tell apart from the machinery.
+Workflows that are internal to the catalog, such as the release workflow, use a leading
+dot in the file name (for example `.release.yml`) so the public, consumable surface is
+easy to tell apart from the machinery.
 
 ## Consuming a block
 
@@ -65,8 +64,9 @@ ceiling.
 
 ## Testing
 
-- actionlint and zizmor check every workflow file, in pre-commit and in CI.
+- actionlint and zizmor check every workflow file, in pre-commit and in CI, so interface
+  and syntax errors are caught before a block is tagged.
 - gitleaks scans for secrets, on staged changes locally and over the full history in CI.
-- Each block has a self-test workflow that calls it against a fixture project, so a change
-  that breaks a block cannot merge green.
-- Real projects consuming the released tags are the final integration layer.
+- A block's integration proof is a real project that consumes it on a pinned tag. Because
+  consumers pin tags, a change on `main` never reaches them until they bump, and a broken
+  block is caught in that repository's adoption or bump pull request before it merges.
