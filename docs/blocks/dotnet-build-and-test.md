@@ -15,7 +15,7 @@ on:
 
 jobs:
   build-and-test:
-    uses: kalloeash/github-actions-templates/.github/workflows/dotnet-build-and-test.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/dotnet-build-and-test.yml@v0
     with:
       solution: MySolution.sln
 ```
@@ -26,7 +26,7 @@ to the working directory:
 ```yaml
 jobs:
   build-and-test:
-    uses: kalloeash/github-actions-templates/.github/workflows/dotnet-build-and-test.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/dotnet-build-and-test.yml@v0
     with:
       dotnet-version: "10.0.x"
       solution: src/MyApp.slnx

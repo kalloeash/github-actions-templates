@@ -16,7 +16,7 @@ on:
 
 jobs:
   pre-commit:
-    uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v0
 ```
 
 Point at a non-default config or Python version when needed:
@@ -24,7 +24,7 @@ Point at a non-default config or Python version when needed:
 ```yaml
 jobs:
   pre-commit:
-    uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/precommit-run.yml@v0
     with:
       python-version: "3.13"
       config: .pre-commit-config.yaml
@@ -43,6 +43,11 @@ Needs `contents: read` only.
 
 ## Notes
 
-- Runs `pre-commit run --all-files`. The calling repository provides the pre-commit
-  configuration and any tools its hooks need on PATH.
+- Runs `pre-commit run --all-files` against the calling repository's configuration.
+- Supports hooks whose environments pre-commit manages itself (`language: python`, `node`,
+  `golang`, and so on). Hooks declared `language: system` call tools that must already
+  exist on the runner, and a caller cannot install extra tools into a called workflow's
+  job, so configurations that rely on system tools beyond the standard runner image fail
+  here. A repository with such hooks keeps its own pre-commit job that installs those
+  tools first.
 - Uses pip directly rather than the upstream pre-commit action, which is in maintenance mode.

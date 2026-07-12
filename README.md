@@ -1,10 +1,9 @@
 # github-actions-templates
 
-[![CI](https://github.com/kalloeash/github-actions-templates/actions/workflows/lint.yml/badge.svg)](https://github.com/kalloeash/github-actions-templates/actions/workflows/lint.yml)
+[![CI](https://github.com/kalloeash/github-actions-templates/actions/workflows/.lint.yml/badge.svg)](https://github.com/kalloeash/github-actions-templates/actions/workflows/.lint.yml)
 
-Reusable GitHub Actions workflows and composite actions for building, testing, and
-releasing projects. Define a CI step once, version it, and consume it from many
-repositories with a short caller file.
+Reusable GitHub Actions workflows for building, testing, and releasing projects. Define a
+CI step once, version it, and consume it from many repositories with a short caller file.
 
 ## Why
 
@@ -20,12 +19,14 @@ Reference a workflow from your own workflow file:
 ```yaml
 jobs:
   ci:
-    uses: kalloeash/github-actions-templates/.github/workflows/<block>.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/<block>.yml@v0
     with:
       # block inputs, documented per block
 ```
 
-Pin to a released major tag (`@v1`) or to a full commit SHA. Do not reference `@main`.
+Pin to the moving major tag (`@v0` today, `@v1` from 1.0), to an exact release tag, or to a
+full commit SHA. During `0.x` a minor release may still change an interface, so pin an
+exact `@vX.Y.Z` or a SHA if you are not watching the changelog. Do not reference `@main`.
 
 ## Catalog
 
@@ -53,7 +54,6 @@ prefix rather than a folder.
 | Block | Purpose |
 |-------|---------|
 | [security-dependency-scan](docs/blocks/security-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
-| [security-image-scan](docs/blocks/security-image-scan.md) | Scan a container image with Trivy, and report to code scanning. |
 
 ### Quality
 
@@ -93,7 +93,8 @@ pip install pre-commit
 pre-commit install
 ```
 
-CI (`.github/workflows/lint.yml`) runs two jobs:
+CI (`.github/workflows/.lint.yml`, dot-prefixed like all catalog-internal workflows) runs
+two jobs:
 
 - format and lint: the pre-commit hooks, including actionlint and zizmor over the workflow files
 - secret scan: gitleaks over the git history

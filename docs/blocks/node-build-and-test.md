@@ -2,7 +2,7 @@
 
 Run the standard quality gate for a Node project in one job: a format check, lint, type
 check, unit tests, and a production build. The steps run in that order and stop at the first
-failure. Every Node project in the fleet calls this one block, so their gates stay identical.
+failure. Every consuming project calls this one block, so their gates stay identical.
 
 ## Usage
 
@@ -16,7 +16,7 @@ on:
 
 jobs:
   build-and-test:
-    uses: kalloeash/github-actions-templates/.github/workflows/node-build-and-test.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/node-build-and-test.yml@v0
 ```
 
 The block defaults to Node 24 at the repository root, so `with:` can be omitted. Override
@@ -25,7 +25,7 @@ the defaults when needed, for example to pin a version or point at a subdirector
 ```yaml
 jobs:
   build-and-test:
-    uses: kalloeash/github-actions-templates/.github/workflows/node-build-and-test.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/node-build-and-test.yml@v0
     with:
       node-version: "22"
       working-directory: apps/web
@@ -66,5 +66,6 @@ grants nothing extra.
 - There are no toggles on purpose: the gate is identical for every Node project. If a
   project genuinely cannot run one of the checks, add a toggle input to the block then,
   rather than skipping the check in the caller.
-- During `0.x`, pin an exact version such as `@v0.2.0`. `@v1` tracks the latest v1 release
-  once the catalog reaches 1.0.
+- The examples pin `@v0`, the moving major tag. During `0.x` a minor release may still
+  change an interface, so pin an exact version such as `@v0.2.0` if you are not watching
+  the changelog.

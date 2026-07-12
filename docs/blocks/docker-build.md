@@ -16,7 +16,7 @@ on:
 
 jobs:
   image:
-    uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v0
     with:
       file: docker/Dockerfile
       tags: myapp:pr-${{ github.event.number }}
@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v0
     with:
       file: docker/Dockerfile
       push: true
