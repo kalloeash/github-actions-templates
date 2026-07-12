@@ -35,6 +35,7 @@ required permissions, and a copy-paste example.
 | Block | Purpose |
 |-------|---------|
 | [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
+| [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
 
 ## Versioning and releases
 
