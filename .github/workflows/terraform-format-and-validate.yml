@@ -1,0 +1,55 @@
+# Check formatting and validate Terraform configuration. One job: terraform fmt in check mode
+# across the whole tree, then terraform validate in each configuration directory. init runs
+# with -backend=false, so validation needs no cloud credentials and no remote state. This is
+# the CI owner of the fmt and validate checks; a Terraform repo runs the same checks locally
+# through its editor and the terraform CLI.
+name: terraform-format-and-validate
+
+on:
+  workflow_call:
+    inputs:
+      terraform-version:
+        description: Terraform version passed to setup-terraform. "latest" installs the newest release.
+        type: string
+        default: latest
+      directories:
+        description: >-
+          Newline-separated list of directories to validate, each holding a Terraform
+          configuration. Defaults to the repository root.
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  format-and-validate:
+    name: format and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+      - name: Validate each directory
+        env:
+          DIRECTORIES: ${{ inputs.directories }}
+        run: |
+          status=0
+          while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+            echo "::group::validate $dir"
+            if terraform -chdir="$dir" init -backend=false -input=false && terraform -chdir="$dir" validate; then
+              echo "$dir: valid"
+            else
+              echo "::error::terraform validate failed in $dir"
+              status=1
+            fi
+            echo "::endgroup::"
+          done <<< "$DIRECTORIES"
+          exit "$status"
