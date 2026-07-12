@@ -1,0 +1,43 @@
+# Run the calling repository's pre-commit hooks in CI. A thin wrapper: install pre-commit
+# with pip and run it, with the hook environments cached on the config hash. Uses pip
+# directly rather than the upstream pre-commit action, which is in maintenance mode.
+name: precommit-run
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version passed to actions/setup-python.
+        type: string
+        default: "3.13"
+      config:
+        description: pre-commit configuration file.
+        type: string
+        default: .pre-commit-config.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    env:
+      CONFIG: ${{ inputs.config }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles(inputs.config) }}
+          restore-keys: pre-commit-${{ runner.os }}-
+      - name: Run pre-commit
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files --show-diff-on-failure --config "$CONFIG"
