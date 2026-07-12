@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-12
+
+### Added
+
+- Add security-secret-scan workflow (#19)
+- Add terraform-format-and-validate workflow (#20)
+- Add terraform-lint workflow (#21)
+
+### Changed
+
+- Consolidate the terraform blocks into one quality gate (#22)
+
+### Fixed
+
+- Repair example pins, catalog drift, and internal naming (#17)
+- Harden the blocks and the catalog's own workflows (#18)
+
 ## [0.2.0] - 2026-07-12
 
 ### Added
