@@ -19,7 +19,7 @@ jobs:
 | Name | Default | Description |
 |------|---------|-------------|
 | `dotnet-version` | `10.0.x` | SDK version passed to actions/setup-dotnet. |
-| `solution` | (empty) | Path to the solution or project to build. Empty builds the working directory. |
+| `solution` | `.` | Solution, project, or directory to build. Defaults to the working directory. |
 | `configuration` | `Release` | Build configuration. |
 | `working-directory` | `.` | Directory the dotnet commands run in. |
 
@@ -30,6 +30,6 @@ nothing back.
 
 ## Notes
 
-- `solution` accepts a `.sln`, a `.slnx`, or a project file.
+- `solution` accepts a `.sln`, a `.slnx`, a project file, or a directory.
 - The test step uses `--logger trx`; the results file is written under the working
   directory if a later step needs to upload it.
