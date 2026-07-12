@@ -37,6 +37,7 @@ required permissions, and a copy-paste example.
 | [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
 | [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
 | [docker-build](docs/blocks/docker-build.md) | Build a container image with Buildx, and optionally push it. |
+| [owasp-dependency-scan](docs/blocks/owasp-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
 
 ## Versioning and releases
 
