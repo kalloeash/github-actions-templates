@@ -19,7 +19,7 @@ on:
 
 jobs:
   dependency-scan:
-    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v0
     secrets:
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
 ```
@@ -29,7 +29,7 @@ Pass a suppression file to accept reviewed findings:
 ```yaml
 jobs:
   dependency-scan:
-    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v0
     with:
       suppression: dependency-check-suppressions.xml
     secrets:

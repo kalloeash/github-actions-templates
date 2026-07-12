@@ -12,7 +12,9 @@ push a container". GitHub requires reusable workflows to be flat files in
 
 A composite action is a bundle of steps that runs inside another job. It is used for shared
 mechanics like "set up the runtime and restore the cache". A composite action lives in its
-own folder, `actions/<name>/action.yml`, and can carry its own README.
+own folder with an `action.yml` and can carry its own README. The catalog holds none yet:
+every block so far is a whole job, which is reusable-workflow territory. The first
+composite action arrives when two blocks need the same steps inside their jobs, not before.
 
 The rule of thumb: reach for a reusable workflow when the shared unit is whole jobs, and a
 composite action when it is steps inside a job.
@@ -22,8 +24,7 @@ composite action when it is steps inside a job.
 | Path | Contents |
 |------|----------|
 | `.github/workflows/` | Reusable workflow blocks, one file per block. GitHub requires these to be flat, so the file name carries the namespace, for example `dotnet-build-and-test.yml`. |
-| `actions/<name>/` | Composite actions, each with an `action.yml` and a README. |
-| `examples/` | Complete caller files to copy into a consuming repository. |
+| `docs/blocks/` | One page per block: inputs, secrets, permissions, and copy-paste examples. |
 | `docs/` | This documentation. |
 
 Workflows that are internal to the catalog, such as the release workflow, use a leading
@@ -37,19 +38,20 @@ A consuming repository references a block by path and version:
 ```yaml
 jobs:
   ci:
-    uses: kalloeash/github-actions-templates/.github/workflows/<block>.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/<block>.yml@v0
     with:
       # block inputs
 ```
 
-Pin to a released major tag (`@v1`) or to a full commit SHA. A commit SHA is the only
-immutable reference. Do not reference `@main`.
+Pin to the moving major tag (`@v0` today, `@v1` from 1.0), to an exact release tag, or to
+a full commit SHA. A commit SHA is the only immutable reference. Do not reference `@main`.
 
 ## Versioning and releases
 
 - Releases follow semver (`vX.Y.Z`).
-- A moving major tag (`v1`) tracks the latest release in that major line, so consumers on
-  `@v1` pick up compatible fixes without editing their caller files.
+- A moving major tag (`v0` today, `v1` from 1.0) tracks the latest release in that major
+  line, so consumers on the major tag pick up compatible fixes without editing their
+  caller files.
 - Releases are immutable: once published, a release tag stays bound to its commit.
 - Third-party actions used inside a block are pinned to a full commit SHA with a version
   comment, and refreshed through Dependabot. This is the mitigation for tag-moving supply
@@ -57,10 +59,15 @@ immutable reference. Do not reference `@main`.
 
 ## Permissions
 
-Every block declares the minimum `permissions:` it needs, starting from `contents: read`
-and raising a single scope per job only where required. A called workflow can never hold
-more token permission than the caller granted, so the documented minimum is also the
-ceiling.
+Blocks declare the minimum `permissions:` they need, starting from `contents: read` and
+raising a single scope per job only where required. A called workflow can never hold more
+token permission than the caller granted, so the documented minimum is also the ceiling.
+
+One deliberate exception: `docker-build` declares no permissions block and inherits the
+caller's grant. It serves both no-push callers (`contents: read` is enough) and push
+callers (which add `packages: write`), and a called workflow that requests more than the
+caller granted fails at startup, so a single fixed block cannot serve both. Its
+documentation tells callers exactly what to grant per mode.
 
 ## Testing
 

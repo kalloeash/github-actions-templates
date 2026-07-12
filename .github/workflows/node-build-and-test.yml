@@ -1,8 +1,8 @@
 # Run the standard quality gate for a Node project in one job: format check, lint, type
 # check, unit test, and production build, in that order (cheapest checks first). One job,
-# like dotnet-build-and-test, so the run stops at the first failing check. Every Node
-# project in the fleet runs the same five checks; a project missing one of these npm
-# scripts fails here by design, which keeps the fleet's gates from drifting apart.
+# like dotnet-build-and-test, so the run stops at the first failing check. Every consumer
+# runs the same five checks; a project missing one of these npm scripts fails here by
+# design, which keeps consumers' gates from drifting apart.
 name: node-build-and-test
 
 on:
