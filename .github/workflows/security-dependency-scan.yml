@@ -3,7 +3,7 @@
 # catch newly disclosed CVEs), a long runtime, and a large NVD database cached across runs.
 # Needs a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) so the
 # database update is fast and reliable.
-name: owasp-dependency-scan
+name: security-dependency-scan
 
 on:
   workflow_call:
