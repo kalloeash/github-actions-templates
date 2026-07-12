@@ -1,0 +1,3 @@
+# Default owner for everything, including the workflow blocks. With branch protection's
+# code-owner review enabled, changes to any file require the owner's approval.
+* @kalloeash

@@ -83,22 +83,9 @@ Dependabot.
 
 ## Contributing
 
-Changes go through a branch and a pull request; nothing is committed straight to `main`.
-Branch names use a `type/short-summary` shape, for example `feat/node-build-and-test` or
-`chore/foundation`.
-
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org): a
-`type(scope): summary` line, for example `feat(docker): add build workflow` or
-`docs: expand the versioning notes`.
-
-The same checks run locally through pre-commit and in CI, so what passes on your machine
-passes in the pipeline. Install `actionlint`, `zizmor`, and `gitleaks` on your PATH, plus
-Python, then enable the hooks:
-
-```sh
-pip install pre-commit
-pre-commit install
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local setup, the workflow, and what a
+complete block change contains. In short: branch plus pull request, Conventional Commits,
+and the same checks locally (pre-commit with actionlint, zizmor, and gitleaks) as in CI.
 
 CI (`.github/workflows/.lint.yml`, dot-prefixed like all catalog-internal workflows) runs
 two jobs:
