@@ -1,0 +1,93 @@
+# Scan project dependencies for known vulnerabilities with OWASP Dependency-Check. Standalone
+# by design: a different trigger profile from CI (callers usually add a weekly schedule to
+# catch newly disclosed CVEs), a long runtime, and a large NVD database cached across runs.
+# Needs a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) so the
+# database update is fast and reliable.
+name: owasp-dependency-scan
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: Project name shown in the report. Defaults to the repository name.
+        type: string
+        default: ""
+      scan-path:
+        description: Path to scan, relative to the repository root.
+        type: string
+        default: "."
+      fail-on-cvss:
+        description: Fail if a vulnerability at or above this CVSS score is found.
+        type: number
+        default: 7
+      format:
+        description: Report format (HTML, JSON, SARIF, ALL).
+        type: string
+        default: HTML
+      suppression:
+        description: Path to a suppression file, relative to the repository root. Empty for none.
+        type: string
+        default: ""
+      enable-experimental:
+        description: Enable experimental analyzers.
+        type: boolean
+        default: true
+    secrets:
+      NVD_API_KEY:
+        description: NVD API key used for the vulnerability database update.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: NVD cache key (weekly rotation)
+        id: nvd
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache the NVD database
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ steps.nvd.outputs.week }}
+          restore-keys: nvd-${{ runner.os }}-
+      - name: Run OWASP Dependency-Check
+        env:
+          # owasp/dependency-check 12.2.2
+          IMAGE: owasp/dependency-check@sha256:ad169904106250816059f113d374d63a49a7cb0fd2c5e476d05c4fb814cc77b9
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          PROJECT: ${{ inputs.project || github.event.repository.name }}
+          SCAN_PATH: ${{ inputs.scan-path }}
+          FORMAT: ${{ inputs.format }}
+          FAIL_ON_CVSS: ${{ inputs.fail-on-cvss }}
+          SUPPRESSION: ${{ inputs.suppression }}
+          EXPERIMENTAL: ${{ inputs.enable-experimental }}
+        run: |
+          if [ -z "$NVD_API_KEY" ]; then
+            echo "::error::NVD_API_KEY secret is not set. Request a free key at https://nvd.nist.gov/developers/request-an-api-key so the NVD update is fast and reliable."
+            exit 1
+          fi
+          mkdir -p "$HOME/dependency-check-data" reports
+          args=(--scan "/src/$SCAN_PATH" --project "$PROJECT" --format "$FORMAT" --out /report --failOnCVSS "$FAIL_ON_CVSS" --nvdApiKey "$NVD_API_KEY")
+          if [ "$EXPERIMENTAL" = "true" ]; then args+=(--enableExperimental); fi
+          if [ -n "$SUPPRESSION" ]; then args+=(--suppression "/src/$SUPPRESSION"); fi
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -v "$HOME/dependency-check-data:/usr/share/dependency-check/data" \
+            -v "$PWD:/src" \
+            -v "$PWD/reports:/report" \
+            "$IMAGE" \
+            "${args[@]}"
+      - name: Upload the report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-check-report
+          path: reports
+          if-no-files-found: ignore
