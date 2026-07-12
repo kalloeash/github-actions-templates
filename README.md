@@ -54,6 +54,7 @@ prefix rather than a folder.
 | Block | Purpose |
 |-------|---------|
 | [security-dependency-scan](docs/blocks/security-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
+| [security-secret-scan](docs/blocks/security-secret-scan.md) | Scan the full git history for committed secrets with gitleaks. |
 
 ### Quality
 
