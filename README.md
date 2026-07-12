@@ -1,5 +1,7 @@
 # github-actions-templates
 
+[![CI](https://github.com/kalloeash/github-actions-templates/actions/workflows/lint.yml/badge.svg)](https://github.com/kalloeash/github-actions-templates/actions/workflows/lint.yml)
+
 Reusable GitHub Actions workflows and composite actions for building, testing, and
 releasing projects. Define a CI step once, version it, and consume it from many
 repositories with a short caller file.
@@ -42,14 +44,33 @@ through Dependabot.
 
 ## Contributing
 
-Workflow and action files are checked with actionlint and zizmor, and the repository runs
-pre-commit and gitleaks over each change. Install `actionlint`, `zizmor`, and `gitleaks`
-on your PATH, then enable the hooks:
+Changes go through a branch and a pull request; nothing is committed straight to `main`.
+Branch names use a `type/short-summary` shape, for example `feat/node-checks` or
+`chore/foundation`.
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org): a
+`type(scope): summary` line, for example `feat(docker): add build workflow` or
+`docs: expand the versioning notes`.
+
+The same checks run locally through pre-commit and in CI, so what passes on your machine
+passes in the pipeline. Install `actionlint`, `zizmor`, and `gitleaks` on your PATH, plus
+Python, then enable the hooks:
 
 ```sh
 pip install pre-commit
 pre-commit install
 ```
+
+CI (`.github/workflows/lint.yml`) runs two jobs:
+
+- format and lint: the pre-commit hooks, including actionlint and zizmor over the workflow files
+- secret scan: gitleaks over the git history
+
+## Design
+
+See [docs/architecture.md](docs/architecture.md) for how the catalog is structured: the
+two kinds of building block, the repository layout, versioning and pinning, and how blocks
+are tested.
 
 ## License
 
