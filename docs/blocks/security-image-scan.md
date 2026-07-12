@@ -1,4 +1,4 @@
-# trivy-image-scan
+# security-image-scan
 
 Scan a container image for known vulnerabilities with Trivy and upload the results to GitHub
 code scanning, so findings show up as alerts in the Security tab. Standalone because
@@ -15,7 +15,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: kalloeash/github-actions-templates/.github/workflows/trivy-image-scan.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/security-image-scan.yml@v1
     with:
       image: ghcr.io/${{ github.repository_owner }}/myapp:1.2.3
       registry: ghcr.io

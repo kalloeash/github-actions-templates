@@ -32,13 +32,33 @@ Pin to a released major tag (`@v1`) or to a full commit SHA. Do not reference `@
 Blocks are added as real projects adopt them. Each block documents its inputs, outputs,
 required permissions, and a copy-paste example.
 
+Reusable workflows must be flat files, so each block's category is carried in its file name
+prefix rather than a folder.
+
+### Build and test
+
 | Block | Purpose |
 |-------|---------|
 | [dotnet-build-and-test](docs/blocks/dotnet-build-and-test.md) | Restore, build, and test a .NET solution or project. |
-| [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
+
+### Container
+
+| Block | Purpose |
+|-------|---------|
 | [docker-build](docs/blocks/docker-build.md) | Build a container image with Buildx, and optionally push it. |
-| [owasp-dependency-scan](docs/blocks/owasp-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
-| [trivy-image-scan](docs/blocks/trivy-image-scan.md) | Scan a container image with Trivy and report to code scanning. |
+
+### Security
+
+| Block | Purpose |
+|-------|---------|
+| [security-dependency-scan](docs/blocks/security-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
+| [security-image-scan](docs/blocks/security-image-scan.md) | Scan a container image with Trivy, and report to code scanning. |
+
+### Quality
+
+| Block | Purpose |
+|-------|---------|
+| [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
 
 ## Versioning and releases
 

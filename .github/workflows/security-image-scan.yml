@@ -2,7 +2,7 @@
 # GitHub code scanning (the Security tab). Standalone by design: publishing SARIF needs
 # security-events: write, and callers often run it on a schedule to catch newly disclosed
 # CVEs in an already-published image.
-name: trivy-image-scan
+name: security-image-scan
 
 on:
   workflow_call:

@@ -1,4 +1,4 @@
-# owasp-dependency-scan
+# security-dependency-scan
 
 Scan project dependencies for known vulnerabilities with OWASP Dependency-Check. Standalone
 by design: callers usually run it on a weekly schedule, to catch newly disclosed CVEs, as
@@ -9,7 +9,7 @@ well as on pull requests. It needs a free NVD API key.
 ```yaml
 jobs:
   dependency-scan:
-    uses: kalloeash/github-actions-templates/.github/workflows/owasp-dependency-scan.yml@v1
+    uses: kalloeash/github-actions-templates/.github/workflows/security-dependency-scan.yml@v1
     with:
       suppression: dependency-check-suppressions.xml
     secrets:
