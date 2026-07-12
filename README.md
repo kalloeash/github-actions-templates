@@ -38,6 +38,7 @@ required permissions, and a copy-paste example.
 | [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
 | [docker-build](docs/blocks/docker-build.md) | Build a container image with Buildx, and optionally push it. |
 | [owasp-dependency-scan](docs/blocks/owasp-dependency-scan.md) | Scan dependencies for known vulnerabilities with OWASP Dependency-Check. |
+| [trivy-image-scan](docs/blocks/trivy-image-scan.md) | Scan a container image with Trivy and report to code scanning. |
 
 ## Versioning and releases
 
