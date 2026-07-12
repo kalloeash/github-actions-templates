@@ -39,16 +39,15 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+# No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
+# contents: read to build, and adds packages: write on the calling job when push is true. A
+# fixed permissions block cannot serve both the push and no-push callers, because a called
+# workflow that requests more than the caller granted fails the run at startup.
 
 jobs:
   build:
     name: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
