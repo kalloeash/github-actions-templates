@@ -49,6 +49,12 @@ prefix rather than a folder.
 |-------|---------|
 | [docker-build](docs/blocks/docker-build.md) | Build a container image with Buildx, and optionally push it. |
 
+### Infrastructure
+
+| Block | Purpose |
+|-------|---------|
+| [terraform-format-and-validate](docs/blocks/terraform-format-and-validate.md) | Check formatting and validate Terraform configuration. |
+
 ### Security
 
 | Block | Purpose |
