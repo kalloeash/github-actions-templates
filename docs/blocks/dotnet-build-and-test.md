@@ -52,5 +52,3 @@ nothing back.
 
 - Restore, build, and test are one job on purpose: the test step runs with `--no-build`
   against the build output, so splitting them would rebuild.
-- The test step uses `--logger trx`; the results file is written under the working directory
-  if a later step needs to upload it.

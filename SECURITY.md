@@ -10,6 +10,10 @@ for security reports.
 
 - Third-party actions used inside these workflows are pinned to a full commit SHA, with a
   version comment, and refreshed through Dependabot.
+- CLI tools installed inside workflow runs (actionlint, gitleaks, git-cliff) are version
+  pinned and checksum verified against the values published with their releases. The OWASP
+  Dependency-Check container image is pinned by digest. Dependabot does not cover these;
+  they are reviewed and bumped by hand.
 - Releases are immutable: a published release tag stays bound to its commit.
-- Consumers should pin to a released major tag (`@v1`) or to a full commit SHA, never to
-  `@main`.
+- Consumers should pin to the moving major tag (`@v0` today), to an exact release tag, or
+  to a full commit SHA, never to `@main`. A commit SHA is the only immutable reference.

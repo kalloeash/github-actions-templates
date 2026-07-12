@@ -44,6 +44,8 @@ jobs:
   scan:
     name: dependency scan
     runs-on: ubuntu-latest
+    # A cold NVD cache makes the database update slow; generous but bounded.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -62,7 +64,9 @@ jobs:
           # owasp/dependency-check 12.2.2
           IMAGE: owasp/dependency-check@sha256:ad169904106250816059f113d374d63a49a7cb0fd2c5e476d05c4fb814cc77b9
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-          PROJECT: ${{ inputs.project || github.event.repository.name }}
+          # github.repository, not github.event.repository.name: the event payload has no
+          # repository object on some triggers (schedule), which would yield an empty name.
+          PROJECT: ${{ inputs.project || github.repository }}
           SCAN_PATH: ${{ inputs.scan-path }}
           FORMAT: ${{ inputs.format }}
           FAIL_ON_CVSS: ${{ inputs.fail-on-cvss }}
@@ -74,12 +78,18 @@ jobs:
             exit 1
           fi
           mkdir -p "$HOME/dependency-check-data" reports
-          args=(--scan "/src/$SCAN_PATH" --project "$PROJECT" --format "$FORMAT" --out /report --failOnCVSS "$FAIL_ON_CVSS" --nvdApiKey "$NVD_API_KEY")
+          # The key travels through a read-only property file, not the docker run argv,
+          # so it never appears in the runner's process table.
+          umask 077
+          printf 'nvd.api.key=%s\n' "$NVD_API_KEY" > "$HOME/dc.properties"
+          trap 'rm -f "$HOME/dc.properties"' EXIT
+          args=(--scan "/src/$SCAN_PATH" --project "$PROJECT" --format "$FORMAT" --out /report --failOnCVSS "$FAIL_ON_CVSS" --propertyfile /run/dc.properties)
           if [ "$EXPERIMENTAL" = "true" ]; then args+=(--enableExperimental); fi
           if [ -n "$SUPPRESSION" ]; then args+=(--suppression "/src/$SUPPRESSION"); fi
           docker run --rm \
             -u "$(id -u):$(id -g)" \
             -v "$HOME/dependency-check-data:/usr/share/dependency-check/data" \
+            -v "$HOME/dc.properties:/run/dc.properties:ro" \
             -v "$PWD:/src" \
             -v "$PWD/reports:/report" \
             "$IMAGE" \

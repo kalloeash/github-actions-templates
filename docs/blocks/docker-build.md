@@ -57,19 +57,47 @@ jobs:
 | `labels` | (empty) | Newline-separated image labels. |
 | `platforms` | (empty) | Target platforms, for example `linux/amd64`. Empty uses the builder default. |
 | `registry` | `ghcr.io` | Registry to log in to when pushing. |
-| `cache-scope` | (repo name) | Buildx GitHub Actions cache scope. |
+| `cache-scope` | (repository) | Buildx GitHub Actions cache scope. |
+
+## Secrets
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `REGISTRY_USERNAME` | no | Registry login user. When omitted, the workflow's GitHub identity is used, which authenticates GHCR only. |
+| `REGISTRY_PASSWORD` | no | Registry login password or token. When omitted, the automatic `GITHUB_TOKEN` is used, which authenticates GHCR only. |
+
+The defaults push to GHCR with no configuration. For any other registry, pass both secrets:
+
+```yaml
+jobs:
+  image:
+    permissions:
+      contents: read
+      packages: write
+    uses: kalloeash/github-actions-templates/.github/workflows/docker-build.yml@v0
+    with:
+      push: true
+      registry: registry.example.com
+      tags: registry.example.com/team/myapp:1.2.3
+    secrets:
+      REGISTRY_USERNAME: ${{ secrets.EXAMPLE_REGISTRY_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.EXAMPLE_REGISTRY_TOKEN }}
+```
 
 ## Permissions
 
 This block declares no permissions of its own; it inherits the caller's `GITHUB_TOKEN`. Grant
 `contents: read` to build (enough for `push: false`), and add `packages: write` on the calling
-job when `push: true`. The registry login uses the automatic `GITHUB_TOKEN`.
+job when `push: true` to GHCR. Keep the calling job's grant minimal: whatever the caller
+grants is what this block's steps run with.
 
 ## Notes
 
 - `push: false` builds and loads the image locally, for verification on a PR. `push: true`
   logs in to the registry and pushes.
+- A multi-platform image cannot be loaded into the local daemon, so `push: false` with more
+  than one platform fails fast with a clear message. Push, or verify one platform per call.
 - Release specifics such as the version and tag names stay in the caller; this block only
   takes the finished `tags`.
-- The Buildx layer cache uses the GitHub Actions cache, scoped to the calling repository name
+- The Buildx layer cache uses the GitHub Actions cache, scoped to the calling repository
   by default.
