@@ -1,0 +1,54 @@
+# Internal self-test workflow. On every push to main and every pull request it calls each
+# block through its same-repo path against a small fixture project under tests/, so a
+# change that breaks a block fails here before it can be tagged. A real consumer on a
+# pinned tag remains the integration proof; this is the catalog-side floor beneath it.
+# Two blocks are not called here: security-secret-scan is consumed directly by .lint.yml,
+# which exercises it on the same events, and security-dependency-scan is not exercised in
+# the catalog at all; the testing section of docs/architecture.md explains why.
+name: self-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# One run per ref: a quick follow-up commit cancels the superseded run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: node
+    uses: ./.github/workflows/node-build-and-test.yml
+    with:
+      working-directory: tests/node
+
+  dotnet:
+    name: dotnet
+    uses: ./.github/workflows/dotnet-build-and-test.yml
+    with:
+      working-directory: tests/dotnet
+
+  docker:
+    name: docker
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      context: tests/docker
+      file: tests/docker/Dockerfile
+      tags: docker-build-selftest:ci
+
+  terraform:
+    name: terraform
+    uses: ./.github/workflows/terraform-format-validate-lint.yml
+    with:
+      directories: tests/terraform
+
+  precommit:
+    name: precommit
+    uses: ./.github/workflows/precommit-run.yml
+    with:
+      config: tests/precommit/config.yaml

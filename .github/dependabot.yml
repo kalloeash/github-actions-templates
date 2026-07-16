@@ -6,3 +6,19 @@ updates:
       interval: weekly
     commit-message:
       prefix: chore
+
+  # The self-test fixtures under tests/ carry real dependencies; keep them patched so the
+  # repository never shows an alert without a fix pull request.
+  - package-ecosystem: npm
+    directory: /tests/node
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+
+  - package-ecosystem: nuget
+    directory: /tests/dotnet
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
