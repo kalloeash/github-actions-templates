@@ -87,11 +87,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the local setup, the workflow, and wh
 complete block change contains. In short: branch plus pull request, Conventional Commits,
 and the same checks locally (pre-commit with actionlint, zizmor, and gitleaks) as in CI.
 
-CI (`.github/workflows/.lint.yml`, dot-prefixed like all catalog-internal workflows) runs
-two jobs:
+CI runs two internal workflows on every push and pull request (dot-prefixed like all
+catalog-internal workflows):
 
-- format and lint: the pre-commit hooks, including actionlint and zizmor over the workflow files
-- secret scan: gitleaks over the git history
+- `.lint.yml`: the pre-commit hooks, including actionlint and zizmor over the workflow
+  files, plus gitleaks over the git history
+- `.test.yml`: calls each block against a fixture project under `tests/`, so a change that
+  breaks a block fails in the catalog before it can be tagged
 
 ## Design
 

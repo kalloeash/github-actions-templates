@@ -4,6 +4,14 @@ NOTES.local.md
 /notes/
 scratch/
 
+# Fixture build artifacts
+tests/node/node_modules/
+tests/node/dist/
+tests/dotnet/bin/
+tests/dotnet/obj/
+tests/terraform/.terraform/
+tests/terraform/.terraform.lock.hcl
+
 # OS and editor
 .DS_Store
 Thumbs.db

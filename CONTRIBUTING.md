@@ -38,11 +38,15 @@ passes in the pipeline.
 A new block, or a change to a block's interface, is complete when it has all of:
 
 1. **The workflow file**, following the house rules below.
-2. **A documentation page** at `docs/blocks/<block>.md` with the same structure as the
+2. **A self-test.** A job in `.github/workflows/.test.yml` that calls the block against a
+   fixture project under `tests/`, so the catalog proves the block runs on every pull
+   request. A block that cannot run against a fixture, such as one needing a paid or
+   rate-limited service, documents why in `.test.yml` instead.
+3. **A documentation page** at `docs/blocks/<block>.md` with the same structure as the
    existing pages: a one-paragraph summary, a complete copy-paste caller example, the
    inputs table, secrets if any, the required permissions, and notes for the sharp edges.
    The README catalog table gets a row.
-3. **A consumer.** Blocks exist for real projects, not for completeness. Name the
+4. **A consumer.** Blocks exist for real projects, not for completeness. Name the
    repository that will call the block, or the concrete project it is being built for. A
    block nobody calls gets removed.
 

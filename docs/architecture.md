@@ -26,6 +26,7 @@ composite action when it is steps inside a job.
 | `.github/workflows/` | Reusable workflow blocks, one file per block. GitHub requires these to be flat, so the file name carries the namespace, for example `dotnet-build-and-test.yml`. |
 | `docs/blocks/` | One page per block: inputs, secrets, permissions, and copy-paste examples. |
 | `docs/` | This documentation. |
+| `tests/` | Fixture projects the self-test workflow runs the blocks against, one directory per stack. |
 
 Workflows that are internal to the catalog, such as the release workflow, use a leading
 dot in the file name (for example `.release.yml`) so the public, consumable surface is
@@ -73,6 +74,11 @@ documentation tells callers exactly what to grant per mode.
 
 - actionlint and zizmor check every workflow file, in pre-commit and in CI, so interface
   and syntax errors are caught before a block is tagged.
+- The self-test workflow (`.test.yml`) runs on every push and pull request. It calls each
+  block through its same-repo path against a small fixture project under `tests/`, so a
+  change that breaks a block fails in the catalog itself, before it is tagged.
+  security-dependency-scan is the one block not self-tested: it needs an NVD API key and a
+  long first run, so its proof stays with its consumers.
 - gitleaks scans for secrets, on staged changes locally and over the full history in CI.
 - A block's integration proof is a real project that consumes it on a pinned tag. Because
   consumers pin tags, a change on `main` never reaches them until they bump, and a broken
