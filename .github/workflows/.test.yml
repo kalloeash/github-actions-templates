@@ -1,9 +1,9 @@
-# Internal self-test workflow. Every push and pull request calls each block through its
-# same-repo path against a small fixture project under tests/, so a change that breaks a
-# block fails here before it can be tagged. A real consumer on a pinned tag remains the
-# integration proof; this is the catalog-side floor beneath it. security-dependency-scan
-# is the one block not called here: it needs an NVD API key secret and a long first run,
-# so its proof stays with its consumers.
+# Internal self-test workflow. On every push to main and every pull request it calls each
+# block through its same-repo path against a small fixture project under tests/, so a
+# change that breaks a block fails here before it can be tagged. A real consumer on a
+# pinned tag remains the integration proof; this is the catalog-side floor beneath it.
+# security-dependency-scan is the one block not called here; the testing section of
+# docs/architecture.md explains why.
 name: self-test
 
 on:
@@ -38,7 +38,7 @@ jobs:
     with:
       context: tests/docker
       file: tests/docker/Dockerfile
-      tags: docker-build-selftest:pr
+      tags: docker-build-selftest:ci
 
   terraform:
     name: terraform

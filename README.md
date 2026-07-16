@@ -85,15 +85,15 @@ Dependabot.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the local setup, the workflow, and what a
 complete block change contains. In short: branch plus pull request, Conventional Commits,
-and the same checks locally (pre-commit with actionlint, zizmor, and gitleaks) as in CI.
+and pre-commit (actionlint, zizmor, and gitleaks) green locally before pushing.
 
-CI runs two internal workflows on every push and pull request (dot-prefixed like all
-catalog-internal workflows):
+CI runs two internal workflows on pushes to `main` and on every pull request (dot-prefixed
+like all catalog-internal workflows):
 
 - `.lint.yml`: the pre-commit hooks, including actionlint and zizmor over the workflow
   files, plus gitleaks over the git history
-- `.test.yml`: calls each block against a fixture project under `tests/`, so a change that
-  breaks a block fails in the catalog before it can be tagged
+- `.test.yml`: calls each block that has a fixture project under `tests/`, so a change
+  that breaks a block fails in the catalog before it can be tagged
 
 ## Design
 

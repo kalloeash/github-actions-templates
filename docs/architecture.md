@@ -74,7 +74,8 @@ documentation tells callers exactly what to grant per mode.
 
 - actionlint and zizmor check every workflow file, in pre-commit and in CI, so interface
   and syntax errors are caught before a block is tagged.
-- The self-test workflow (`.test.yml`) runs on every push and pull request. It calls each
+- The self-test workflow (`.test.yml`) runs on pushes to `main` and on every pull
+  request. It calls each
   block through its same-repo path against a small fixture project under `tests/`, so a
   change that breaks a block fails in the catalog itself, before it is tagged.
   security-dependency-scan is the one block not self-tested: it needs an NVD API key and a

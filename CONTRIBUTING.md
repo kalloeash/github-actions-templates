@@ -6,8 +6,8 @@ change looks like.
 
 ## Local setup
 
-The same checks run locally through pre-commit and in CI, so what passes on your machine
-passes in the pipeline.
+The pre-commit hooks run the same checks locally that the lint workflow runs in CI. CI
+also runs the self-tests, which call each block against a fixture project under `tests/`.
 
 1. Install the three CLI tools on your PATH: [actionlint](https://github.com/rhysd/actionlint),
    [zizmor](https://github.com/zizmorcore/zizmor), and
@@ -41,7 +41,8 @@ A new block, or a change to a block's interface, is complete when it has all of:
 2. **A self-test.** A job in `.github/workflows/.test.yml` that calls the block against a
    fixture project under `tests/`, so the catalog proves the block runs on every pull
    request. A block that cannot run against a fixture, such as one needing a paid or
-   rate-limited service, documents why in `.test.yml` instead.
+   rate-limited service, documents why in the testing section of
+   [docs/architecture.md](docs/architecture.md) instead.
 3. **A documentation page** at `docs/blocks/<block>.md` with the same structure as the
    existing pages: a one-paragraph summary, a complete copy-paste caller example, the
    inputs table, secrets if any, the required permissions, and notes for the sharp edges.
@@ -57,7 +58,7 @@ Fixes and documentation changes need only themselves plus green checks.
 These are the rules the existing blocks follow; a review will hold new code to them.
 
 - Names are lowercase kebab-case: `<stack-or-tool>-<verb-phrase>.yml`. Workflows internal
-  to the catalog carry a leading dot (`.lint.yml`, `.release.yml`).
+  to the catalog carry a leading dot (`.lint.yml`, `.test.yml`, `.release.yml`).
 - Third-party actions are pinned to a full commit SHA with a `# vX.Y.Z` comment.
   Dependabot refreshes the pins.
 - Binaries installed inside a run are version pinned and checksum verified against the

@@ -1,8 +1,10 @@
 # Fixture configuration for the precommit-run self-test. Python-managed hooks only, so the
-# block's pip-installed pre-commit runs them without extra tools on the runner's PATH.
+# block's pip-installed pre-commit runs them without extra tools on the runner's PATH. The
+# hooks are deliberately ones the catalog's own pre-commit configuration does not run, so a
+# failure here points at the block, not at a file both configurations check.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      - id: check-merge-conflict
-      - id: check-yaml
+      - id: check-case-conflict
+      - id: mixed-line-ending
