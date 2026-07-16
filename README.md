@@ -91,7 +91,7 @@ CI runs two internal workflows on pushes to `main` and on every pull request (do
 like all catalog-internal workflows):
 
 - `.lint.yml`: the pre-commit hooks, including actionlint and zizmor over the workflow
-  files, plus gitleaks over the git history
+  files, plus the security-secret-scan block over the git history
 - `.test.yml`: calls each block that has a fixture project under `tests/`, so a change
   that breaks a block fails in the catalog before it can be tagged
 

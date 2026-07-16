@@ -78,9 +78,13 @@ documentation tells callers exactly what to grant per mode.
   request. It calls each
   block through its same-repo path against a small fixture project under `tests/`, so a
   change that breaks a block fails in the catalog itself, before it is tagged.
-  security-dependency-scan is the one block not self-tested: it needs an NVD API key and a
-  long first run, so its proof stays with its consumers.
-- gitleaks scans for secrets, on staged changes locally and over the full history in CI.
+  security-secret-scan is not called from `.test.yml` because the lint workflow consumes
+  it directly, which exercises it on the same events. security-dependency-scan is the one
+  block not exercised in the catalog: it needs an NVD API key and a long first run, so its
+  proof stays with its consumers.
+- gitleaks scans for secrets: on staged changes locally, and over the full history in CI,
+  where the lint workflow calls the security-secret-scan block. The catalog consumes its
+  own block, so the scan and the block's proof are one mechanism.
 - A block's integration proof is a real project that consumes it on a pinned tag. Because
   consumers pin tags, a change on `main` never reaches them until they bump, and a broken
   block is caught in that repository's adoption or bump pull request before it merges.
