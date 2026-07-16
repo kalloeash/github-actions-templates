@@ -2,8 +2,9 @@
 # block through its same-repo path against a small fixture project under tests/, so a
 # change that breaks a block fails here before it can be tagged. A real consumer on a
 # pinned tag remains the integration proof; this is the catalog-side floor beneath it.
-# security-dependency-scan is the one block not called here; the testing section of
-# docs/architecture.md explains why.
+# Two blocks are not called here: security-secret-scan is consumed directly by .lint.yml,
+# which exercises it on the same events, and security-dependency-scan is not exercised in
+# the catalog at all; the testing section of docs/architecture.md explains why.
 name: self-test
 
 on:
@@ -51,7 +52,3 @@ jobs:
     uses: ./.github/workflows/precommit-run.yml
     with:
       config: tests/precommit/config.yaml
-
-  secret-scan:
-    name: secret-scan
-    uses: ./.github/workflows/security-secret-scan.yml

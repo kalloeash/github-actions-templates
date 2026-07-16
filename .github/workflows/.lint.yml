@@ -40,20 +40,8 @@ jobs:
           pip install pre-commit==4.6.0
           SKIP=gitleaks pre-commit run --all-files --show-diff-on-failure
 
+  # Calls the catalog's own block: one mechanism serves as the scan and as the block's
+  # proof, and the gitleaks pin lives in one file.
   secret-scan:
     name: secret scan
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Install gitleaks
-        run: |
-          curl -sSfLo gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
-          sudo tar -xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
-          rm gitleaks.tar.gz
-      - name: Scan history
-        run: gitleaks git . --redact --no-banner
+    uses: ./.github/workflows/security-secret-scan.yml
