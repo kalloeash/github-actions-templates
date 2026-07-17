@@ -4,8 +4,8 @@
 # checked: the plan must come from this commit, this directory, and this Terraform version,
 # and the plan bytes must match the recorded checksum. Locking stays on here, with a
 # timeout instead of a failure when another operation holds the lock, because an apply is
-# the one writer the lock exists for. The Azure and state firewall inputs work the same way
-# as in terraform-plan.
+# the one writer the lock exists for. The Azure inputs work the same way as in
+# terraform-plan; the block never touches network rules.
 name: terraform-apply
 
 on:
@@ -51,18 +51,6 @@ on:
         description: Subscription id for the OIDC login.
         type: string
         default: ""
-      state-storage-account:
-        description: State storage account whose firewall denies GitHub runners. The job allows its own IP before init and removes it afterwards. Needs the azure inputs and state-resource-group.
-        type: string
-        default: ""
-      state-resource-group:
-        description: Resource group of the state storage account. Required with state-storage-account.
-        type: string
-        default: ""
-      state-container:
-        description: Blob container holding the state, used to verify the firewall rule is effective before init runs.
-        type: string
-        default: "tfstate"
 
 # No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
 # contents: read, and adds id-token: write on the calling job when the azure inputs are set,
@@ -86,43 +74,21 @@ jobs:
       ARM_USE_AZUREAD: ${{ inputs.azure-client-id != '' }}
       TF_IN_AUTOMATION: "1"
     steps:
-      # The azure inputs travel together and the firewall inputs need them. A partial set
-      # can only fail later with a confusing provider error, so fail early instead.
+      # The azure inputs travel together; a partial set can only fail later with a
+      # confusing provider error, so fail early instead.
       - name: Guard the inputs
         env:
           CLIENT_ID: ${{ inputs.azure-client-id }}
           TENANT_ID: ${{ inputs.azure-tenant-id }}
           SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
-          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
-          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
         run: |
           if { [ -n "$CLIENT_ID" ] || [ -n "$TENANT_ID" ] || [ -n "$SUBSCRIPTION_ID" ]; } &&
             { [ -z "$CLIENT_ID" ] || [ -z "$TENANT_ID" ] || [ -z "$SUBSCRIPTION_ID" ]; }; then
             echo "::error::set azure-client-id, azure-tenant-id, and azure-subscription-id together, or none of them."
             exit 1
           fi
-          if [ -n "$STORAGE_ACCOUNT" ] || [ -n "$RESOURCE_GROUP" ]; then
-            if [ -z "$STORAGE_ACCOUNT" ] || [ -z "$RESOURCE_GROUP" ]; then
-              echo "::error::state-storage-account and state-resource-group go together."
-              exit 1
-            fi
-            if [ -z "$CLIENT_ID" ]; then
-              echo "::error::the state firewall inputs need the azure inputs; the rule is managed with az."
-              exit 1
-            fi
-          fi
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          persist-credentials: false
-      # The catalog's own source, checked out at the exact commit of this workflow file,
-      # so the block and the firewall action can never drift apart.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        if: ${{ inputs.state-storage-account != '' }}
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          path: .catalog
-          sparse-checkout: actions
           persist-credentials: false
       - name: Download the plan artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -163,14 +129,6 @@ jobs:
           client-id: ${{ inputs.azure-client-id }}
           tenant-id: ${{ inputs.azure-tenant-id }}
           subscription-id: ${{ inputs.azure-subscription-id }}
-      - name: Allow the runner through the state firewall
-        if: ${{ inputs.state-storage-account != '' }}
-        uses: ./.catalog/actions/state-firewall-access
-        with:
-          mode: allow
-          storage-account: ${{ inputs.state-storage-account }}
-          resource-group: ${{ inputs.state-resource-group }}
-          container: ${{ inputs.state-container }}
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ inputs.terraform-version }}
@@ -211,13 +169,3 @@ jobs:
           if [ "$(wc -c <"$RUNNER_TEMP/apply.txt")" -gt 60000 ]; then
             echo "The apply output was truncated; the full output is in the job log." >>"$GITHUB_STEP_SUMMARY"
           fi
-      - name: Remove the runner from the state firewall
-        if: ${{ always() && inputs.state-storage-account != '' }}
-        uses: ./.catalog/actions/state-firewall-access
-        with:
-          mode: remove
-          storage-account: ${{ inputs.state-storage-account }}
-          resource-group: ${{ inputs.state-resource-group }}
-      - name: Remove the catalog checkout
-        if: ${{ always() && inputs.state-storage-account != '' }}
-        run: rm -rf .catalog

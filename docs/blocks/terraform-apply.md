@@ -6,8 +6,8 @@ which branch; the block carries no policy of its own. Before applying, the plan'
 metadata is checked: the plan must come from this commit, this directory, and this
 Terraform version, and the plan bytes must match the recorded checksum. Locking stays on,
 with a timeout instead of an immediate failure when another operation holds the lock,
-because an apply is the one writer the lock exists for. The Azure and state firewall
-inputs work the same way as in terraform-plan.
+because an apply is the one writer the lock exists for. The Azure inputs work the same
+way as in terraform-plan; the block never changes network rules.
 
 ## Usage
 
@@ -42,8 +42,6 @@ jobs:
       azure-client-id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      state-storage-account: ${{ vars.STATE_STORAGE_ACCOUNT }}
-      state-resource-group: ${{ vars.STATE_RESOURCE_GROUP }}
 
   apply:
     needs: plan
@@ -60,8 +58,6 @@ jobs:
       azure-client-id: ${{ vars.AZURE_APPLY_CLIENT_ID }}
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      state-storage-account: ${{ vars.STATE_STORAGE_ACCOUNT }}
-      state-resource-group: ${{ vars.STATE_RESOURCE_GROUP }}
 ```
 
 The environment (here `azure`) is configured in the consuming repository: required
@@ -74,14 +70,9 @@ whose state moved after planning, and the concurrency group keeps deploys in mer
 order, so the read-only plan identity stays read-only. See the lock note in
 [terraform-plan](terraform-plan.md).
 
-When the firewall inputs are used, every workflow that opens the firewall on the same
-storage account should share one concurrency scope: this deploy group, plus `needs:`
-chains between plan jobs inside the pull-request workflow, keep the account's rule
-collection single-writer within the repository. The shared
-[state-firewall-access](../../actions/state-firewall-access/README.md) action re-adds a
-clobbered rule as a second line of defense. Changes made outside GitHub Actions, or from
-other repositories using the same account, are outside that coordination; give each
-repository its own state storage account if that situation is real.
+The state backend must be reachable from the runner; this block never changes network
+rules. The two sound configurations are described in the network access section of
+[terraform-plan](terraform-plan.md).
 
 ## Azure OIDC prerequisites
 
@@ -102,8 +93,7 @@ resource "azurerm_federated_identity_credential" "github_apply_environment" {
 ```
 
 The apply identity holds `Contributor` on the scope it manages and
-`Storage Blob Data Contributor` on the state container, plus the same single-account
-firewall role when the firewall inputs are used.
+`Storage Blob Data Contributor` on the state container.
 
 ## Inputs
 
@@ -119,9 +109,6 @@ firewall role when the firewall inputs are used.
 | `azure-client-id` | empty | Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all. |
 | `azure-tenant-id` | empty | Tenant id for the OIDC login. |
 | `azure-subscription-id` | empty | Subscription id for the OIDC login. |
-| `state-storage-account` | empty | State storage account whose firewall denies GitHub runners. The job allows its own IP before init and removes it afterwards. Needs the azure inputs and `state-resource-group`. |
-| `state-resource-group` | empty | Resource group of the state storage account. Required with `state-storage-account`. |
-| `state-container` | `tfstate` | Blob container holding the state, used to verify the firewall rule is effective before init runs. |
 
 ## Permissions
 
@@ -146,5 +133,5 @@ granted fails the run at startup.
 - The state lock stays on and `lock-timeout` makes queued applies wait instead of
   failing; pair it with the caller-level `concurrency` group shown above so applies run
   in merge order.
-- The firewall handling, the fork limitation, and the same-region caveat are the same as
-  in [terraform-plan](terraform-plan.md); the notes there apply unchanged.
+- The network access model and the fork limitation are described in
+  [terraform-plan](terraform-plan.md) and apply unchanged here.

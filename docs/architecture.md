@@ -89,9 +89,9 @@ documentation tells callers exactly what to grant per mode.
   it directly, which exercises it on the same events. security-dependency-scan is the one
   block not exercised in the catalog: it needs an NVD API key and a long first run, so its
   proof stays with its consumers. terraform-plan and terraform-apply are exercised as a
-  chained pair against a local-backend fixture, which proves the plan, the artifact
-  hand-off, and the apply without credentials; their Azure login and state firewall paths
-  cannot run against a fixture, so those stay consumer-proven, like the dependency scan.
+  chained pair against a local-backend fixture, which proves the plan, the artifact and
+  metadata hand-off, and the apply without credentials; their Azure login path cannot
+  run against a fixture, so it stays consumer-proven, like the dependency scan.
   Failure paths of reusable workflows are not asserted in `.test.yml`, because a job that
   calls a reusable workflow does not support `continue-on-error`, so an expected failure
   would fail the whole run; refusal logic therefore lives in early guard steps inside the

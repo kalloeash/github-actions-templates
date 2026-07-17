@@ -7,8 +7,7 @@ plan output lands in the job step summary. When `artifact-name` is set the binar
 file is uploaded together with a metadata file binding it to the commit, so
 [terraform-apply](terraform-apply.md) can verify it applies exactly what was reviewed.
 The Azure inputs are optional: when set, the job logs in with OIDC workload identity
-federation, no stored secrets, and can hold open a just-in-time firewall rule on the
-state storage account for the duration of the job.
+federation, no stored secrets.
 
 ## Usage
 
@@ -29,9 +28,8 @@ jobs:
       working-directory: infra
 ```
 
-A plan against Azure remote state with OIDC, including the firewall inputs for a state
-storage account that denies public network access, and variable values that live outside
-the repository. The identifiers are repository variables, not secrets; none of them is
+A plan against Azure remote state with OIDC, with variable values that live outside the
+repository. The identifiers are repository variables, not secrets; none of them is
 sensitive. The `if` keeps the job off pull requests from forks, which never receive an
 OIDC token:
 
@@ -59,28 +57,31 @@ jobs:
       azure-client-id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      state-storage-account: ${{ vars.STATE_STORAGE_ACCOUNT }}
-      state-resource-group: ${{ vars.STATE_RESOURCE_GROUP }}
 ```
 
-Two root configurations that share one state storage account must chain their plan jobs
-with `needs:`. The firewall rule collection is one list on the account, and concurrent
-edits overwrite each other:
+## Network access to remote state
 
-```yaml
-jobs:
-  plan-infra:
-    uses: kalloeash/github-actions-templates/.github/workflows/terraform-plan.yml@v0
-    with:
-      working-directory: infra
-      # azure and state inputs as above
-  plan-aks:
-    needs: plan-infra
-    uses: kalloeash/github-actions-templates/.github/workflows/terraform-plan.yml@v0
-    with:
-      working-directory: aks
-      # azure and state inputs as above
-```
+This block never changes network rules. The state backend must be reachable from the
+runner, and that is a deliberate design decision with exactly two sound configurations:
+
+- Identity-first, the posture for GitHub-hosted runners. The state storage account
+  allows public network access, and security is carried by the identity layer: Entra-only
+  authentication with shared keys disabled, role assignments scoped to the state
+  container, TLS-only, versioning, soft delete, and logging. This is the configuration
+  Microsoft's own Terraform state tutorial and OIDC reference sample run with hosted
+  runners. IaC scanners flag the open network path; suppress that finding with a
+  documented risk acceptance, not silently.
+- Network-restricted, the posture when a runner can live inside the network. A private
+  endpoint on the storage account, reached by GitHub's VNet-injected hosted runners
+  (Team and Enterprise organizations, larger runners) or by a self-hosted runner behind
+  fixed egress. Do not use self-hosted runners on public repositories; a fork pull
+  request can execute code on them.
+
+Patterns that mutate the account firewall per job, adding the runner's IP and removing
+it afterwards, exist in the wild. This catalog deliberately does not ship one: the rule
+collection is a single list updated by read-modify-write with no transactional safety,
+so concurrent runs corrupt each other's access in ways retries can narrow but never
+close, and no first-party guidance endorses the pattern.
 
 ## Security model
 
@@ -93,12 +94,9 @@ this section before wiring the Azure inputs.
   receive an OIDC token, but same-repository branches do, so branch permissions and a
   reviewed lockfile are part of the security boundary, and the plan identity must stay
   least-privilege.
-- The read-only roles below keep a leaked or misused plan token harmless at the
-  infrastructure and state layers. The firewall role is the exception:
-  `Microsoft.Storage/storageAccounts/write` is a broad management-plane permission on
-  that one account, not a rule-only one. It is scoped to the single state storage
-  account, and it is the price of reaching a firewalled backend from public runners;
-  treat it as a deliberate, documented concession.
+- The roles below are strictly read-only, at the infrastructure layer and at the state
+  layer, so a leaked or misused plan token cannot change anything or take the state
+  lock.
 - The plan output is visible to everyone who can read the repository, in the job log and
   in the step summary. Terraform masks values marked `sensitive`, nothing else. On a
   public repository that audience is everyone; set `write-step-summary` to false to keep
@@ -108,6 +106,8 @@ this section before wiring the Azure inputs.
   artifacts of a public repository are downloadable by anyone. The block therefore
   refuses artifact mode on a public repository unless
   `allow-artifact-on-public-repo: true` states that the plan is safe to publish.
+- The `variables` input is for non-secret values only. Anything passed there flows into
+  workflow inputs, plan output, saved plans, logs, and state.
 
 ## Azure OIDC prerequisites
 
@@ -151,30 +151,7 @@ resource "azurerm_role_assignment" "github_plan_state_reader" {
 ```
 
 A read-only plan runs with `Reader` plus `Storage Blob Data Reader`; the identity cannot
-take the state lock, cannot write state, and cannot change infrastructure. When the
-firewall inputs are used, the identity also needs the management-plane write described in
-the security model, scoped to that single resource:
-
-```hcl
-resource "azurerm_role_definition" "state_firewall" {
-  name  = "state-firewall-rule-writer"
-  scope = azurerm_storage_account.tfstate.id
-  permissions {
-    actions = [
-      "Microsoft.Storage/storageAccounts/read",
-      "Microsoft.Storage/storageAccounts/write",
-    ]
-  }
-  assignable_scopes = [azurerm_storage_account.tfstate.id]
-}
-
-resource "azurerm_role_assignment" "github_plan_state_firewall" {
-  scope              = azurerm_storage_account.tfstate.id
-  role_definition_id = azurerm_role_definition.state_firewall.role_definition_resource_id
-  principal_id       = azurerm_user_assigned_identity.github_plan.principal_id
-  principal_type     = "ServicePrincipal"
-}
-```
+take the state lock, cannot write state, and cannot change infrastructure.
 
 Azure rejects concurrent federated credential writes on one identity; when an identity
 gets more than one credential, chain them with `depends_on`. Role assignments can take a
@@ -188,7 +165,7 @@ one retry.
 | `working-directory` | `.` | Root configuration directory to plan. |
 | `terraform-version` | `1.15.8` | Terraform version passed to setup-terraform. Pinned in the block, bumped centrally; override to match your project. |
 | `backend-config` | empty | Backend config file passed to `init`, relative to `working-directory`. Empty skips the flag. |
-| `variables` | empty | Newline-separated variable assignments in tfvars syntax, written to an auto-loaded tfvars file before planning. For values that live outside the repository. |
+| `variables` | empty | Newline-separated variable assignments in tfvars syntax, written to an auto-loaded tfvars file before planning. Non-secret values only. |
 | `lock` | `false` | Take the state lock during plan. A speculative plan only reads state. Locking needs write access on the state blob, which the read-only plan identity above does not have. |
 | `artifact-name` | empty | When set, the plan is saved with `-out` and uploaded as an artifact under this name for terraform-apply, together with its metadata file. |
 | `artifact-retention-days` | `1` | Retention for the plan artifact. Short by default because plan files can contain sensitive values in clear text. |
@@ -197,9 +174,6 @@ one retry.
 | `azure-client-id` | empty | Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all. |
 | `azure-tenant-id` | empty | Tenant id for the OIDC login. |
 | `azure-subscription-id` | empty | Subscription id for the OIDC login. |
-| `state-storage-account` | empty | State storage account whose firewall denies GitHub runners. The job allows its own IP before init and removes it afterwards. Needs the azure inputs and `state-resource-group`. |
-| `state-resource-group` | empty | Resource group of the state storage account. Required with `state-storage-account`. |
-| `state-container` | `tfstate` | Blob container holding the state, used to verify the firewall rule is effective before init runs. |
 
 ## Outputs
 
@@ -223,16 +197,7 @@ granted fails the run at startup.
   plan whose state moved after planning, and the deploy workflow's concurrency group
   keeps applies in merge order. Enable the lock only with an identity that holds
   `Storage Blob Data Contributor` on the state container.
-- The firewall handling lives in the shared
-  [state-firewall-access](../../actions/state-firewall-access/README.md) action: the rule
-  is added before init, verified with a data-plane poll that re-adds it if a concurrent
-  run clobbered the collection, and removed with retries in a step that always runs. If
-  the runner is killed hard the removal can be skipped; a firewall managed by the
-  consumer's own Terraform shows the leaked rule as drift on the next plan, and a
-  scheduled call of this block makes that check periodic.
-- Azure IP network rules do not apply to traffic from the same Azure region as the
-  storage account, and GitHub-hosted runners run in Azure. Runners are hosted in other
-  regions than most accounts, so the rule works, but a persistent 403 after the polling
-  window is this limitation showing up.
+- A scheduled call of this block doubles as drift detection: a plan that suddenly shows
+  changes nobody made is drift, surfaced weekly instead of at the next human plan.
 - `terraform_wrapper` is off because the block reads the plan's stdout and exit code
   itself.

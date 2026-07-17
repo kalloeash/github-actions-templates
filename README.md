@@ -76,7 +76,6 @@ prefix rather than a folder.
 | Action | Purpose |
 |--------|---------|
 | [install-pinned-tool](actions/install-pinned-tool/README.md) | Download, checksum-verify, and install a pinned tool binary; owns the catalog's tool pin table. |
-| [state-firewall-access](actions/state-firewall-access/README.md) | Temporarily allow the running job through an Azure storage account firewall; shared by the terraform plan and apply blocks. |
 
 ## Versioning and releases
 
