@@ -41,6 +41,63 @@ jobs:
       file: tests/docker/Dockerfile
       tags: docker-build-selftest:ci
 
+  # The docker job above proves the local build; this pair proves the push path with all
+  # three supply-chain options on. It runs only on pushes to main, never on pull requests,
+  # because it needs packages, id-token, and attestations write, which pull request runs
+  # do not get. Every release tag points at a main commit, so the pushed path is proven at
+  # each tagged commit through the push that landed it.
+  docker-push:
+    name: docker push with attestations
+    if: ${{ github.event_name == 'push' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      context: tests/docker
+      file: tests/docker/Dockerfile
+      push: true
+      provenance: true
+      sbom: true
+      attest: true
+      image-name: ghcr.io/${{ github.repository }}/selftest
+      tags: ghcr.io/${{ github.repository }}/selftest:ci
+
+  # The assertions live outside docker-build on purpose: they check the image the way a
+  # consumer would, against the registry, not against workflow state.
+  docker-push-verify:
+    name: verify the pushed image
+    needs: docker-push
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      IMAGE: ghcr.io/${{ github.repository }}/selftest:ci
+      OWNER: ${{ github.repository_owner }}
+      ACTOR: ${{ github.actor }}
+    steps:
+      - name: Log in to the registry
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Check the provenance and sbom attached to the image
+        run: |
+          PROVENANCE="$(docker buildx imagetools inspect "$IMAGE" --format '{{ json .Provenance }}')"
+          if [ "$PROVENANCE" = "null" ] || [ -z "$PROVENANCE" ]; then
+            echo "::error::no provenance attached to $IMAGE"
+            exit 1
+          fi
+          SBOM="$(docker buildx imagetools inspect "$IMAGE" --format '{{ json .SBOM }}')"
+          if [ "$SBOM" = "null" ] || [ -z "$SBOM" ]; then
+            echo "::error::no sbom attached to $IMAGE"
+            exit 1
+          fi
+      - name: Verify the stored attestation
+        run: gh attestation verify "oci://$IMAGE" --owner "$OWNER"
+
   terraform:
     name: terraform
     uses: ./.github/workflows/terraform-format-validate-lint.yml
