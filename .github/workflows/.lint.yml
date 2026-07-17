@@ -25,14 +25,11 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.13"
-      # Downloaded binaries are checksum-verified against the values published with the
-      # release, so a moved or tampered release asset fails the job instead of running.
+      # Version and checksum live in the action's pin table.
       - name: Install actionlint
-        run: |
-          curl -sSfLo actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
-          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum -c -
-          sudo tar -xzf actionlint.tar.gz -C /usr/local/bin actionlint
-          rm actionlint.tar.gz
+        uses: ./actions/install-pinned-tool
+        with:
+          tool: actionlint
       - name: Install zizmor
         run: pip install zizmor==1.26.1
       - name: Run pre-commit
