@@ -134,3 +134,57 @@ jobs:
           url: https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
           sha512: e716cce3a07dda41b1e370d6afbd7a59eb3d4739509fb7856aeec8da2be28c0396584e29e106141c1a1c535c1827dbc1f60417524f5cfb1da9e11f700bd00f30
           archive-member: git-cliff-2.13.1/git-cliff
+
+  # The action's guarantees are refusals, so each one is asserted as a failure: a wrong
+  # checksum, a tool outside the pin table without a url, and an archive member that
+  # points outside the archive must all fail their step. continue-on-error keeps the job
+  # alive so the last step can assert the outcomes.
+  action-error-paths:
+    name: action error paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Install with a wrong checksum
+        id: wrong-checksum
+        continue-on-error: true
+        uses: ./actions/install-pinned-tool
+        with:
+          tool: git-cliff
+          url: https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+          archive-member: git-cliff-2.13.1/git-cliff
+      - name: Install a tool outside the pin table
+        id: unknown-tool
+        continue-on-error: true
+        uses: ./actions/install-pinned-tool
+        with:
+          tool: not-a-catalog-tool
+      - name: Install with an escaping archive member
+        id: escaping-member
+        continue-on-error: true
+        uses: ./actions/install-pinned-tool
+        with:
+          tool: git-cliff
+          url: https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
+          sha512: e716cce3a07dda41b1e370d6afbd7a59eb3d4739509fb7856aeec8da2be28c0396584e29e106141c1a1c535c1827dbc1f60417524f5cfb1da9e11f700bd00f30
+          archive-member: ../escape
+      - name: Assert every path failed
+        env:
+          WRONG_CHECKSUM: ${{ steps.wrong-checksum.outcome }}
+          UNKNOWN_TOOL: ${{ steps.unknown-tool.outcome }}
+          ESCAPING_MEMBER: ${{ steps.escaping-member.outcome }}
+        run: |
+          status=0
+          for pair in "wrong checksum:$WRONG_CHECKSUM" "unknown tool:$UNKNOWN_TOOL" \
+            "escaping member:$ESCAPING_MEMBER"; do
+            name="${pair%:*}"
+            outcome="${pair##*:}"
+            if [ "$outcome" != "failure" ]; then
+              echo "::error::the $name step ended $outcome, expected failure."
+              status=1
+            fi
+          done
+          exit "$status"
