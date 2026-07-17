@@ -1,7 +1,19 @@
-# Internal release workflow. On a vX.Y.Z tag push it builds release notes from the
-# Conventional Commits with git-cliff, publishes an immutable GitHub Release, and moves the
-# floating major tag (for example v0) to the released commit. The floating major carries no
-# release of its own, so it stays movable. Not consumable by other repositories.
+# Internal release pipeline. On a vX.Y.Z tag push the verification jobs run first: on
+# that event, the same-repo job references below resolve to the tagged commit, so every
+# block except security-dependency-scan executes at the exact code consumers pin, against
+# the same fixtures the self-tests use (docs/architecture.md, testing section). Only when
+# all of them are green does the release job build the notes with git-cliff, publish the
+# immutable GitHub Release, and move the floating major tag (for example v0) to the
+# released commit. The version tag itself exists from the push, but the release page and
+# the floating major wait for verification, so a consumer tracking either can never
+# receive an unverified release. A verification failure opens an issue instead and nothing
+# is published; the fix is a new version, because full release tags are immutable.
+# Verification and publication share one workflow on purpose: a chained design cannot
+# work, because the release is created with the default GITHUB_TOKEN, and events created
+# with that token never trigger other workflows.
+# security-secret-scan runs here even though .test.yml leaves it to the lint workflow,
+# because the lint workflow does not run on tags. The floating major carries no release of
+# its own, so it stays movable. Not consumable by other repositories.
 name: release
 
 on:
@@ -9,7 +21,8 @@ on:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
-permissions: {}
+permissions:
+  contents: read
 
 # Two tags pushed close together must not interleave the floating-major move; queue them.
 concurrency:
@@ -17,8 +30,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  node:
+    name: node
+    uses: ./.github/workflows/node-build-and-test.yml
+    with:
+      working-directory: tests/node
+
+  dotnet:
+    name: dotnet
+    uses: ./.github/workflows/dotnet-build-and-test.yml
+    with:
+      working-directory: tests/dotnet
+
+  docker:
+    name: docker
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      context: tests/docker
+      file: tests/docker/Dockerfile
+      tags: docker-build-selftest:release
+
+  terraform:
+    name: terraform
+    uses: ./.github/workflows/terraform-format-validate-lint.yml
+    with:
+      directories: tests/terraform
+
+  precommit:
+    name: precommit
+    uses: ./.github/workflows/precommit-run.yml
+    with:
+      config: tests/precommit/config.yaml
+
+  iac:
+    name: iac
+    uses: ./.github/workflows/security-iac-scan.yml
+    with:
+      scan-path: tests
+
+  secret-scan:
+    name: secret-scan
+    uses: ./.github/workflows/security-secret-scan.yml
+
   release:
     name: release
+    needs: [node, dotnet, docker, terraform, precommit, iac, secret-scan]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # contents: write creates the GitHub Release and moves the floating major tag.
@@ -67,3 +123,33 @@ jobs:
             gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null
           fi
           echo "moved $MAJOR to $SHA"
+
+  report:
+    name: report a failed verification
+    needs: [node, dotnet, docker, terraform, precommit, iac, secret-scan]
+    if: ${{ failure() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          TITLE="Release $TAG failed verification"
+          # A re-run of a failed workflow must not file the same report twice.
+          if gh issue list --repo "$REPO" --state open -L 100 --json title |
+            jq -e --arg t "$TITLE" 'any(.[]; .title == $t)' >/dev/null; then
+            echo "an open issue for $TAG already exists, skipping"
+            exit 0
+          fi
+          FAILED="$(printf '%s' "$RESULTS" |
+            jq -r '[to_entries[] | select(.value.result != "success") | .key] | join(", ")')"
+          gh issue create --repo "$REPO" \
+            --title "$TITLE" \
+            --body "Blocks that failed at the tagged commit: $FAILED. The release was not published and the floating major tag did not move. Run: $RUN_URL"

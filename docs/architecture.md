@@ -89,12 +89,14 @@ documentation tells callers exactly what to grant per mode.
   it directly, which exercises it on the same events. security-dependency-scan is the one
   block not exercised in the catalog: it needs an NVD API key and a long first run, so its
   proof stays with its consumers.
-- The release-verification workflow (`.verify-release.yml`) runs on the version tag push,
-  alongside the release workflow. On that event, same-repo references resolve to the
-  tagged commit, so every block except security-dependency-scan executes at the exact code
-  consumers pin, minutes after the tag lands. It includes security-secret-scan, which the
-  pull-request layer leaves to the lint workflow, because the lint workflow does not run
-  on tags. A failure opens an issue, so a bad release cannot pass silently.
+- Release verification runs inside the release workflow (`.release.yml`), on the version
+  tag push. On that event, same-repo references resolve to the tagged commit, so every
+  block except security-dependency-scan executes at the exact code consumers pin, and the
+  GitHub Release and the floating major tag wait for the outcome. It includes
+  security-secret-scan, which the pull-request layer leaves to the lint workflow, because
+  the lint workflow does not run on tags. A failure opens an issue and nothing is
+  published, so a consumer tracking the floating major or the release page can never
+  receive an unverified release.
 - gitleaks scans for secrets: on staged changes locally, and over the full history in CI,
   where the lint workflow calls the security-secret-scan block. The catalog consumes its
   own block, so the scan and the block's proof are one mechanism.
