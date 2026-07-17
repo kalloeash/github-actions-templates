@@ -1,6 +1,7 @@
-# Internal release pipeline. On a vX.Y.Z tag push the verification jobs run first: on
-# that event, the same-repo job references below resolve to the tagged commit, so every
-# block except security-dependency-scan executes at the exact code consumers pin, against
+# Internal release pipeline. On a vX.Y.Z tag push the check-tag job and the verification
+# jobs run first: check-tag catches the manual-step mistakes (a tag whose version has no
+# changelog section, a tag on a commit that is not on main), and the verification jobs run
+# every block except security-dependency-scan at the exact code consumers pin, against
 # the same fixtures the self-tests use (docs/architecture.md, testing section). Only when
 # all of them are green does the release job build the notes with git-cliff, publish the
 # immutable GitHub Release, and move the floating major tag (for example v0) to the
@@ -30,6 +31,35 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The two mistakes the manual steps allow: tagging a version whose changelog section
+  # was never merged (or tagging the wrong version), and tagging a commit that is not on
+  # main. Both fail here, before anything is published.
+  check-tag:
+    name: check the tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Full history plus branch refs, so origin/main is available for the ancestry
+          # check.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tag against the changelog and main
+        env:
+          TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          VERSION="${TAG#v}"
+          if ! grep -qF "## [$VERSION]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION; merge the release commit first, then tag it."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "::error::$TAG points at a commit that is not on main."
+            exit 1
+          fi
+
   node:
     name: node
     uses: ./.github/workflows/node-build-and-test.yml
@@ -74,7 +104,7 @@ jobs:
 
   release:
     name: release
-    needs: [node, dotnet, docker, terraform, precommit, iac, secret-scan]
+    needs: [check-tag, node, dotnet, docker, terraform, precommit, iac, secret-scan]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # contents: write creates the GitHub Release and moves the floating major tag.
@@ -126,7 +156,7 @@ jobs:
 
   report:
     name: report a failed verification
-    needs: [node, dotnet, docker, terraform, precommit, iac, secret-scan]
+    needs: [check-tag, node, dotnet, docker, terraform, precommit, iac, secret-scan]
     if: ${{ failure() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -152,4 +182,4 @@ jobs:
             jq -r '[to_entries[] | select(.value.result != "success") | .key] | join(", ")')"
           gh issue create --repo "$REPO" \
             --title "$TITLE" \
-            --body "Blocks that failed at the tagged commit: $FAILED. The release was not published and the floating major tag did not move. Run: $RUN_URL"
+            --body "Failed jobs: $FAILED. The release was not published and the floating major tag did not move. Run: $RUN_URL"
