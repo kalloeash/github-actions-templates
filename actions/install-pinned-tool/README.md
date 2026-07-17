@@ -77,6 +77,11 @@ skip all of that and use the local `./actions/...` path directly.
 
 - The checksum is compared by value, not filename, so a renamed or replaced release
   asset fails the job.
+- Give `url` exactly one checksum. `sha256` and `sha512` together are rejected, and so is
+  a checksum without `url`, because the pin table owns the checksums of its own tools.
 - Only the named archive member is extracted; the archive is never unpacked wholesale
-  into the working tree.
-- Linux runners only, matching the catalog's blocks.
+  into the working tree. `archive-member` must be a relative path inside the archive;
+  absolute paths and `..` segments are rejected.
+- The download retries transient failures three times; a changed or missing asset still
+  fails.
+- Linux amd64 runners only, matching the catalog's blocks.

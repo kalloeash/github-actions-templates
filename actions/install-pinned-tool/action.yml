@@ -19,7 +19,9 @@ inputs:
     required: false
     default: ""
   sha512:
-    description: SHA-512 checksum of the archive, for releases that publish SHA-512 values.
+    description: >-
+      SHA-512 checksum of the archive, for releases that publish SHA-512 values. Give one
+      checksum, not both.
     required: false
     default: ""
   archive-member:
@@ -38,6 +40,17 @@ runs:
         SHA512: ${{ inputs.sha512 }}
         MEMBER: ${{ inputs.archive-member }}
       run: |
+        # Input guards first, before the pin table may fill the checksum variables: two
+        # checksums are ambiguous, and a checksum without url would be silently replaced
+        # by the pin table's value.
+        if [ -n "$SHA256" ] && [ -n "$SHA512" ]; then
+          echo "::error::give sha256 or sha512, not both."
+          exit 1
+        fi
+        if [ -z "$URL" ] && { [ -n "$SHA256" ] || [ -n "$SHA512" ]; }; then
+          echo "::error::a checksum needs url; pin-table tools own their checksums."
+          exit 1
+        fi
         # The pin table: the one place where every catalog tool version and checksum
         # lives. Checksums are the values published with each release.
         if [ -z "$URL" ]; then
@@ -65,9 +78,18 @@ runs:
           exit 1
         fi
         MEMBER="${MEMBER:-$TOOL}"
+        # The member is extracted into, and installed from, the temporary directory; a
+        # path that escapes it must never reach tar or install.
+        case "$MEMBER" in
+          /* | ../* | */../* | */.. | ..)
+            echo "::error::archive-member must be a relative path inside the archive."
+            exit 1
+            ;;
+        esac
         tmp="$(mktemp -d)"
         trap 'rm -rf "$tmp"' EXIT
-        curl -sSfLo "$tmp/archive.tar.gz" "$URL"
+        # --retry only covers transient failures; a changed or missing asset still fails.
+        curl -sSfL --retry 3 -o "$tmp/archive.tar.gz" "$URL"
         # Compared by value, so a moved or tampered release asset fails the job instead
         # of running.
         if [ -n "$SHA256" ]; then
