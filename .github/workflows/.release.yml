@@ -8,6 +8,9 @@
 # the floating major wait for verification, so a consumer tracking either can never
 # receive an unverified release. A verification failure opens an issue instead and nothing
 # is published; the fix is a new version, because full release tags are immutable.
+# Verification and publication share one workflow on purpose: a chained design cannot
+# work, because the release is created with the default GITHUB_TOKEN, and events created
+# with that token never trigger other workflows.
 # security-secret-scan runs here even though .test.yml leaves it to the lint workflow,
 # because the lint workflow does not run on tags. The floating major carries no release of
 # its own, so it stays movable. Not consumable by other repositories.
@@ -140,7 +143,7 @@ jobs:
         run: |
           TITLE="Release $TAG failed verification"
           # A re-run of a failed workflow must not file the same report twice.
-          if gh issue list --repo "$REPO" --state open --json title |
+          if gh issue list --repo "$REPO" --state open -L 100 --json title |
             jq -e --arg t "$TITLE" 'any(.[]; .title == $t)' >/dev/null; then
             echo "an open issue for $TAG already exists, skipping"
             exit 0
