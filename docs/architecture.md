@@ -12,9 +12,15 @@ push a container". GitHub requires reusable workflows to be flat files in
 
 A composite action is a bundle of steps that runs inside another job. It is used for shared
 mechanics like "set up the runtime and restore the cache". A composite action lives in its
-own folder with an `action.yml` and can carry its own README. The catalog holds none yet:
-every block so far is a whole job, which is reusable-workflow territory. The first
-composite action arrives when two blocks need the same steps inside their jobs, not before.
+own folder with an `action.yml` and its own README. The catalog holds one:
+[install-pinned-tool](../actions/install-pinned-tool/README.md), which downloads a release
+archive, verifies its checksum, and installs one binary. It arrived when a fourth workflow
+repeated the same install steps, which is the threshold this section always set: a
+composite action appears when blocks need the same steps inside their jobs, not before.
+
+A block references the action at the exact commit of its own workflow file, through
+`job.workflow_repository` and `job.workflow_sha`, so a block and the action version it
+uses can never drift apart: a consumer pinning a release tag gets both from that tag.
 
 The rule of thumb: reach for a reusable workflow when the shared unit is whole jobs, and a
 composite action when it is steps inside a job.
@@ -24,6 +30,7 @@ composite action when it is steps inside a job.
 | Path | Contents |
 |------|----------|
 | `.github/workflows/` | Reusable workflow blocks, one file per block. GitHub requires these to be flat, so the file name carries the namespace, for example `dotnet-build-and-test.yml`. |
+| `actions/` | Composite actions, one folder per action with its own README. |
 | `docs/blocks/` | One page per block: inputs, secrets, permissions, and copy-paste examples. |
 | `docs/` | This documentation. |
 | `tests/` | Fixture projects the self-test workflow runs the blocks against, one directory per stack. |

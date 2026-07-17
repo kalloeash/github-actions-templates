@@ -64,7 +64,8 @@ These are the rules the existing blocks follow; a review will hold new code to t
 - Third-party actions are pinned to a full commit SHA with a `# vX.Y.Z` comment.
   Dependabot refreshes the pins.
 - Binaries installed inside a run are version pinned and checksum verified against the
-  values published with their release.
+  values published with their release, through `actions/install-pinned-tool`. The pin
+  table lives in that action.
 - Jobs run on a numbered runner image (`ubuntu-24.04`), never `ubuntu-latest`, so a runner
   change is an explicit, reviewed bump.
 - Tool version inputs default to a pinned version, bumped centrally in the block, never
