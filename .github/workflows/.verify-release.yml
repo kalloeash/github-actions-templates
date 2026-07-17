@@ -3,8 +3,9 @@
 # block executes at the exact code consumers pin, against the same fixtures the self-tests
 # use. This is the third layer of the testing model, between the pull-request self-test
 # and consumer adoption. A failure opens an issue, so a bad release cannot pass silently.
-# security-secret-scan and security-dependency-scan are absent here for the same reasons
-# they are absent from .test.yml; the testing section of docs/architecture.md explains.
+# security-secret-scan runs here even though .test.yml leaves it to the lint workflow,
+# because the lint workflow does not run on releases. security-dependency-scan is the one
+# block absent, for the reason the testing section of docs/architecture.md explains.
 name: verify-release
 
 on:
@@ -57,9 +58,13 @@ jobs:
     with:
       scan-path: tests
 
+  secret-scan:
+    name: secret-scan
+    uses: ./.github/workflows/security-secret-scan.yml
+
   report:
     name: report a failed verification
-    needs: [node, dotnet, docker, terraform, precommit, iac]
+    needs: [node, dotnet, docker, terraform, precommit, iac, secret-scan]
     if: ${{ failure() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5

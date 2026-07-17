@@ -84,8 +84,10 @@ documentation tells callers exactly what to grant per mode.
   proof stays with its consumers.
 - The release-verification workflow (`.verify-release.yml`) runs when a release is
   published. On the release event, same-repo references resolve to the tagged commit, so
-  every self-tested block also executes at the exact code consumers pin, minutes after
-  publication. A failure opens an issue, so a bad release cannot pass silently.
+  every block except security-dependency-scan executes at the exact code consumers pin,
+  minutes after publication. It includes security-secret-scan, which the pull-request
+  layer leaves to the lint workflow, because the lint workflow does not run on releases.
+  A failure opens an issue, so a bad release cannot pass silently.
 - gitleaks scans for secrets: on staged changes locally, and over the full history in CI,
   where the lint workflow calls the security-secret-scan block. The catalog consumes its
   own block, so the scan and the block's proof are one mechanism.
