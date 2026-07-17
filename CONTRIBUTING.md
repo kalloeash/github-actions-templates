@@ -40,10 +40,10 @@ A new block, or a change to a block's interface, is complete when it has all of:
 1. **The workflow file**, following the house rules below.
 2. **A self-test and a release verification.** A job in `.github/workflows/.test.yml` that
    calls the block against a fixture project under `tests/`, so the catalog proves the
-   block runs on every pull request, and the same job in
-   `.github/workflows/.verify-release.yml`, so the block also runs at every published
-   release. A block that cannot run against a fixture, such as one needing a paid or
-   rate-limited service, documents why in the testing section of
+   block runs on every pull request, and the same job among the verification jobs of
+   `.github/workflows/.release.yml`, so the block also runs at the tagged commit before a
+   release is published. A block that cannot run against a fixture, such as one needing a
+   paid or rate-limited service, documents why in the testing section of
    [docs/architecture.md](docs/architecture.md) instead.
 3. **A documentation page** at `docs/blocks/<block>.md` with the same structure as the
    existing pages: a one-paragraph summary, a complete copy-paste caller example, the
