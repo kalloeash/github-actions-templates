@@ -38,9 +38,11 @@ also runs the self-tests, which call each block against a fixture project under 
 A new block, or a change to a block's interface, is complete when it has all of:
 
 1. **The workflow file**, following the house rules below.
-2. **A self-test.** A job in `.github/workflows/.test.yml` that calls the block against a
-   fixture project under `tests/`, so the catalog proves the block runs on every pull
-   request. A block that cannot run against a fixture, such as one needing a paid or
+2. **A self-test and a release verification.** A job in `.github/workflows/.test.yml` that
+   calls the block against a fixture project under `tests/`, so the catalog proves the
+   block runs on every pull request, and the same job in
+   `.github/workflows/.verify-release.yml`, so the block also runs at every published
+   release. A block that cannot run against a fixture, such as one needing a paid or
    rate-limited service, documents why in the testing section of
    [docs/architecture.md](docs/architecture.md) instead.
 3. **A documentation page** at `docs/blocks/<block>.md` with the same structure as the
@@ -62,7 +64,8 @@ These are the rules the existing blocks follow; a review will hold new code to t
 - Third-party actions are pinned to a full commit SHA with a `# vX.Y.Z` comment.
   Dependabot refreshes the pins.
 - Binaries installed inside a run are version pinned and checksum verified against the
-  values published with their release.
+  values published with their release, through `actions/install-pinned-tool`. The pin
+  table lives in that action.
 - Jobs run on a numbered runner image (`ubuntu-24.04`), never `ubuntu-latest`, so a runner
   change is an explicit, reviewed bump.
 - Tool version inputs default to a pinned version, bumped centrally in the block, never

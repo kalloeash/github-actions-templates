@@ -12,9 +12,15 @@ push a container". GitHub requires reusable workflows to be flat files in
 
 A composite action is a bundle of steps that runs inside another job. It is used for shared
 mechanics like "set up the runtime and restore the cache". A composite action lives in its
-own folder with an `action.yml` and can carry its own README. The catalog holds none yet:
-every block so far is a whole job, which is reusable-workflow territory. The first
-composite action arrives when two blocks need the same steps inside their jobs, not before.
+own folder with an `action.yml` and its own README. The catalog holds one:
+[install-pinned-tool](../actions/install-pinned-tool/README.md), which downloads a release
+archive, verifies its checksum, and installs one binary. It arrived when a fourth workflow
+repeated the same install steps, which is the threshold this section always set: a
+composite action appears when blocks need the same steps inside their jobs, not before.
+
+A block references the action at the exact commit of its own workflow file, through
+`job.workflow_repository` and `job.workflow_sha`, so a block and the action version it
+uses can never drift apart: a consumer pinning a release tag gets both from that tag.
 
 The rule of thumb: reach for a reusable workflow when the shared unit is whole jobs, and a
 composite action when it is steps inside a job.
@@ -24,6 +30,7 @@ composite action when it is steps inside a job.
 | Path | Contents |
 |------|----------|
 | `.github/workflows/` | Reusable workflow blocks, one file per block. GitHub requires these to be flat, so the file name carries the namespace, for example `dotnet-build-and-test.yml`. |
+| `actions/` | Composite actions, one folder per action with its own README. |
 | `docs/blocks/` | One page per block: inputs, secrets, permissions, and copy-paste examples. |
 | `docs/` | This documentation. |
 | `tests/` | Fixture projects the self-test workflow runs the blocks against, one directory per stack. |
@@ -82,6 +89,12 @@ documentation tells callers exactly what to grant per mode.
   it directly, which exercises it on the same events. security-dependency-scan is the one
   block not exercised in the catalog: it needs an NVD API key and a long first run, so its
   proof stays with its consumers.
+- The release-verification workflow (`.verify-release.yml`) runs when a release is
+  published. On the release event, same-repo references resolve to the tagged commit, so
+  every block except security-dependency-scan executes at the exact code consumers pin,
+  minutes after publication. It includes security-secret-scan, which the pull-request
+  layer leaves to the lint workflow, because the lint workflow does not run on releases.
+  A failure opens an issue, so a bad release cannot pass silently.
 - gitleaks scans for secrets: on staged changes locally, and over the full history in CI,
   where the lint workflow calls the security-secret-scan block. The catalog consumes its
   own block, so the scan and the block's proof are one mechanism.

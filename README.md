@@ -69,6 +69,12 @@ prefix rather than a folder.
 |-------|---------|
 | [precommit-run](docs/blocks/precommit-run.md) | Run the repository's pre-commit hooks in CI. |
 
+### Composite actions
+
+| Action | Purpose |
+|--------|---------|
+| [install-pinned-tool](actions/install-pinned-tool/README.md) | Download, checksum-verify, and install a pinned tool binary; owns the catalog's tool pin table. |
+
 ## Versioning and releases
 
 Releases follow semver. A moving major tag (`vN`) tracks the latest release in that major
