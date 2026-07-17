@@ -1,0 +1,81 @@
+name: install-pinned-tool
+description: >-
+  Download a release archive, verify its checksum against the value published with the
+  release, and install a single binary from it. The pin table inside the action owns the
+  version, URL, and checksum for the catalog's tools; explicit url and checksum inputs
+  override the table for anything else.
+inputs:
+  tool:
+    description: >-
+      Binary to install. actionlint, gitleaks, and trivy come from the pin table; any
+      other name requires url and a checksum.
+    required: true
+  url:
+    description: Release archive URL. Overrides the pin table.
+    required: false
+    default: ""
+  sha256:
+    description: SHA-256 checksum of the archive. Required with url unless sha512 is given.
+    required: false
+    default: ""
+  sha512:
+    description: SHA-512 checksum of the archive, for releases that publish SHA-512 values.
+    required: false
+    default: ""
+  archive-member:
+    description: Path of the binary inside the archive. Defaults to the tool name.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Download, verify, and install
+      shell: bash
+      env:
+        TOOL: ${{ inputs.tool }}
+        URL: ${{ inputs.url }}
+        SHA256: ${{ inputs.sha256 }}
+        SHA512: ${{ inputs.sha512 }}
+        MEMBER: ${{ inputs.archive-member }}
+      run: |
+        # The pin table: the one place where every catalog tool version and checksum
+        # lives. Checksums are the values published with each release.
+        if [ -z "$URL" ]; then
+          case "$TOOL" in
+            actionlint) # v1.7.12
+              URL="https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+              SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+              ;;
+            gitleaks) # v8.30.1
+              URL="https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+              SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+              ;;
+            trivy) # v0.72.0
+              URL="https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz"
+              SHA256="bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea"
+              ;;
+            *)
+              echo "::error::'$TOOL' is not in the pin table; pass url and sha256 or sha512."
+              exit 1
+              ;;
+          esac
+        fi
+        if [ -z "$SHA256" ] && [ -z "$SHA512" ]; then
+          echo "::error::url needs sha256 or sha512."
+          exit 1
+        fi
+        MEMBER="${MEMBER:-$TOOL}"
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        curl -sSfLo "$tmp/archive.tar.gz" "$URL"
+        # Compared by value, so a moved or tampered release asset fails the job instead
+        # of running.
+        if [ -n "$SHA256" ]; then
+          echo "$SHA256  $tmp/archive.tar.gz" | sha256sum -c -
+        else
+          echo "$SHA512  $tmp/archive.tar.gz" | sha512sum -c -
+        fi
+        # Extract only the named member, never the whole archive.
+        tar -xzf "$tmp/archive.tar.gz" -C "$tmp" "$MEMBER"
+        sudo install -m 0755 "$tmp/$MEMBER" "/usr/local/bin/$TOOL"
+        command -v "$TOOL"
