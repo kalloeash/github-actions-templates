@@ -52,3 +52,9 @@ jobs:
     uses: ./.github/workflows/precommit-run.yml
     with:
       config: tests/precommit/config.yaml
+
+  iac:
+    name: iac
+    uses: ./.github/workflows/security-iac-scan.yml
+    with:
+      scan-path: tests
