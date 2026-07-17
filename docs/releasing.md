@@ -37,6 +37,9 @@ Conventional Commit messages with [git-cliff](https://git-cliff.org), configured
 4. The [`.release.yml`](../.github/workflows/.release.yml) workflow runs on the tag. It
    builds the release notes with git-cliff, publishes an immutable GitHub Release, and moves
    the floating major tag (`vN`) to the released commit.
+5. Publishing the release triggers [`.verify-release.yml`](../.github/workflows/.verify-release.yml),
+   which runs every self-tested block at the released commit against the fixtures. The
+   release is done when it is green; a failure opens an issue.
 
 ## Notes
 
