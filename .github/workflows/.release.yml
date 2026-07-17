@@ -86,6 +86,22 @@ jobs:
     with:
       directories: tests/terraform
 
+  terraform-plan:
+    name: terraform plan
+    uses: ./.github/workflows/terraform-plan.yml
+    with:
+      working-directory: tests/terraform-deploy
+      artifact-name: terraform-deploy-plan
+
+  terraform-apply:
+    name: terraform apply
+    needs: terraform-plan
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      working-directory: tests/terraform-deploy
+      artifact-name: terraform-deploy-plan
+      environment: self-test
+
   precommit:
     name: precommit
     uses: ./.github/workflows/precommit-run.yml
@@ -104,7 +120,7 @@ jobs:
 
   release:
     name: release
-    needs: [check-tag, node, dotnet, docker, terraform, precommit, iac, secret-scan]
+    needs: [check-tag, node, dotnet, docker, terraform, terraform-plan, terraform-apply, precommit, iac, secret-scan]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # contents: write creates the GitHub Release and moves the floating major tag.
@@ -156,7 +172,7 @@ jobs:
 
   report:
     name: report a failed verification
-    needs: [check-tag, node, dotnet, docker, terraform, precommit, iac, secret-scan]
+    needs: [check-tag, node, dotnet, docker, terraform, terraform-plan, terraform-apply, precommit, iac, secret-scan]
     if: ${{ failure() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5

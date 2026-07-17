@@ -1,0 +1,197 @@
+# Apply the exact plan that terraform-plan saved. The job binds to a caller-owned GitHub
+# environment, so the consumer decides who approves an apply and from which branch; the
+# block itself never carries that policy. Locking stays on here, with a timeout instead of
+# a failure when another operation holds the lock, because an apply is the one writer the
+# lock exists for. The Azure and state firewall inputs work the same way as in
+# terraform-plan.
+name: terraform-apply
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Root configuration directory to apply. Must match the plan.
+        type: string
+        default: "."
+      terraform-version:
+        description: Terraform version passed to setup-terraform. Use the version that produced the plan; the default is pinned and bumped centrally.
+        type: string
+        default: "1.15.8"
+      backend-config:
+        description: Backend config file passed to init, relative to working-directory. Empty skips the flag.
+        type: string
+        default: ""
+      artifact-name:
+        description: Name of the plan artifact uploaded by terraform-plan in the same run.
+        type: string
+        required: true
+      environment:
+        description: GitHub environment the apply job binds to. The consumer owns the environment and its protection rules.
+        type: string
+        required: true
+      lock-timeout:
+        description: How long the apply waits for a busy state lock before failing.
+        type: string
+        default: "300s"
+      azure-client-id:
+        description: Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all.
+        type: string
+        default: ""
+      azure-tenant-id:
+        description: Tenant id for the OIDC login.
+        type: string
+        default: ""
+      azure-subscription-id:
+        description: Subscription id for the OIDC login.
+        type: string
+        default: ""
+      state-storage-account:
+        description: State storage account whose firewall denies GitHub runners. The job allows its own IP before init and removes it afterwards. Needs the azure inputs and state-resource-group.
+        type: string
+        default: ""
+      state-resource-group:
+        description: Resource group of the state storage account. Required with state-storage-account.
+        type: string
+        default: ""
+      state-container:
+        description: Blob container holding the state, used to verify the firewall rule is effective before init runs.
+        type: string
+        default: "tfstate"
+
+# No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
+# contents: read, and adds id-token: write on the calling job when the azure inputs are set,
+# because the OIDC login mints a token. A fixed permissions block cannot serve both modes,
+# because a called workflow that requests more than the caller granted fails the run at
+# startup.
+
+jobs:
+  apply:
+    name: apply
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    env:
+      # Read by the azurerm provider and backend only; harmless when the azure inputs are
+      # empty and the configuration does not use them.
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: ${{ inputs.azure-client-id != '' }}
+      ARM_USE_AZUREAD: ${{ inputs.azure-client-id != '' }}
+      TF_IN_AUTOMATION: "1"
+    steps:
+      # The azure inputs travel together and the firewall inputs need them. A partial set
+      # can only fail later with a confusing provider error, so fail early instead.
+      - name: Guard the azure inputs
+        env:
+          CLIENT_ID: ${{ inputs.azure-client-id }}
+          TENANT_ID: ${{ inputs.azure-tenant-id }}
+          SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
+          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
+        run: |
+          if { [ -n "$CLIENT_ID" ] || [ -n "$TENANT_ID" ] || [ -n "$SUBSCRIPTION_ID" ]; } &&
+            { [ -z "$CLIENT_ID" ] || [ -z "$TENANT_ID" ] || [ -z "$SUBSCRIPTION_ID" ]; }; then
+            echo "::error::set azure-client-id, azure-tenant-id, and azure-subscription-id together, or none of them."
+            exit 1
+          fi
+          if [ -n "$STORAGE_ACCOUNT" ] || [ -n "$RESOURCE_GROUP" ]; then
+            if [ -z "$STORAGE_ACCOUNT" ] || [ -z "$RESOURCE_GROUP" ]; then
+              echo "::error::state-storage-account and state-resource-group go together."
+              exit 1
+            fi
+            if [ -z "$CLIENT_ID" ]; then
+              echo "::error::the state firewall inputs need the azure inputs; the rule is managed with az."
+              exit 1
+            fi
+          fi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Log in to Azure
+        if: ${{ inputs.azure-client-id != '' }}
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+      - name: Allow the runner through the state firewall
+        if: ${{ inputs.state-storage-account != '' }}
+        env:
+          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
+          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
+          CONTAINER: ${{ inputs.state-container }}
+        run: |
+          RUNNER_IP="$(curl -fsS https://api.ipify.org)"
+          echo "RUNNER_IP=$RUNNER_IP" >>"$GITHUB_ENV"
+          az storage account network-rule add --account-name "$STORAGE_ACCOUNT" \
+            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none
+          # Rules propagate in seconds to minutes; poll the data plane until the rule is
+          # effective instead of guessing with a fixed sleep.
+          for attempt in $(seq 1 12); do
+            if az storage blob list --auth-mode login --account-name "$STORAGE_ACCOUNT" \
+              --container-name "$CONTAINER" --num-results 1 --output none 2>/dev/null; then
+              echo "state reachable after $attempt attempts"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::the state storage account is still unreachable after three minutes."
+          exit 1
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          # The wrapper rewrites stdout and exit codes; the apply step reads both itself.
+          terraform_wrapper: false
+      - name: Init
+        env:
+          DIR: ${{ inputs.working-directory }}
+          BACKEND_CONFIG: ${{ inputs.backend-config }}
+        run: |
+          if [ -n "$BACKEND_CONFIG" ]; then
+            terraform -chdir="$DIR" init -input=false -backend-config="$BACKEND_CONFIG"
+          else
+            terraform -chdir="$DIR" init -input=false
+          fi
+      - name: Download the plan artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/plan-artifact
+      - name: Apply
+        env:
+          DIR: ${{ inputs.working-directory }}
+          LOCK_TIMEOUT: ${{ inputs.lock-timeout }}
+        run: |
+          code=0
+          terraform -chdir="$DIR" apply -input=false -no-color "-lock-timeout=$LOCK_TIMEOUT" \
+            "$RUNNER_TEMP/plan-artifact/tfplan" >"$RUNNER_TEMP/apply.txt" 2>&1 || code=$?
+          cat "$RUNNER_TEMP/apply.txt"
+          exit "$code"
+      - name: Write the apply output to the step summary
+        if: ${{ always() }}
+        env:
+          DIR: ${{ inputs.working-directory }}
+        run: |
+          [ -f "$RUNNER_TEMP/apply.txt" ] || exit 0
+          {
+            echo "## terraform apply: $DIR"
+            echo '```'
+            head -c 60000 "$RUNNER_TEMP/apply.txt"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [ "$(wc -c <"$RUNNER_TEMP/apply.txt")" -gt 60000 ]; then
+            echo "The apply output was truncated; the full output is in the job log." >>"$GITHUB_STEP_SUMMARY"
+          fi
+      # Removing an absent rule is a no-op, so this is safe on any failure path. A hard
+      # runner kill can still leak the rule; the firewall is owned by the consumer's own
+      # Terraform, so a leaked rule surfaces as drift on the next plan of that code.
+      - name: Remove the runner from the state firewall
+        if: ${{ always() && inputs.state-storage-account != '' }}
+        env:
+          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
+          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
+        run: |
+          [ -z "${RUNNER_IP:-}" ] && exit 0
+          az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" \
+            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none

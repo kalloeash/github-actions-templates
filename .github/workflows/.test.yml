@@ -104,6 +104,28 @@ jobs:
     with:
       directories: tests/terraform
 
+  # The pair proves the full loop: plan saves the artifact, apply consumes it in a later
+  # job on a different runner, exactly how a consumer's deploy workflow hands the reviewed
+  # plan to the gated apply. The fixture uses the local backend and a built-in resource,
+  # so no credentials are involved; the Azure paths are consumer-proven
+  # (docs/architecture.md, testing section). The environment is unprotected and exists
+  # only so the required input is exercised; deployment policy belongs to consumers.
+  terraform-plan:
+    name: terraform plan
+    uses: ./.github/workflows/terraform-plan.yml
+    with:
+      working-directory: tests/terraform-deploy
+      artifact-name: terraform-deploy-plan
+
+  terraform-apply:
+    name: terraform apply
+    needs: terraform-plan
+    uses: ./.github/workflows/terraform-apply.yml
+    with:
+      working-directory: tests/terraform-deploy
+      artifact-name: terraform-deploy-plan
+      environment: self-test
+
   precommit:
     name: precommit
     uses: ./.github/workflows/precommit-run.yml

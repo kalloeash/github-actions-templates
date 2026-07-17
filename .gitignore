@@ -11,6 +11,10 @@ tests/dotnet/bin/
 tests/dotnet/obj/
 tests/terraform/.terraform/
 tests/terraform/.terraform.lock.hcl
+tests/terraform-deploy/.terraform/
+tests/terraform-deploy/.terraform.lock.hcl
+tests/terraform-deploy/terraform.tfstate
+tests/terraform-deploy/terraform.tfstate.backup
 
 # OS and editor
 .DS_Store
