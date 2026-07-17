@@ -36,6 +36,10 @@ split_commits = false
 # Map Conventional-Commit types to Keep-a-Changelog sections.
 # Anything not listed is dropped from the changelog.
 commit_parsers = [
+  # A block removal is its own commit worded "<type>: remove ..."; it lands under Removed.
+  { message = "^(feat|fix|refactor)(\\(.*\\))?!?: remove", group = "Removed" },
+  # Fixture dependency bumps never affect consumers; keep them out of the changelog.
+  { message = "^chore\\(fixtures\\)", skip = true },
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },
   { message = "^perf", group = "Changed" },
