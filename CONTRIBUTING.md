@@ -63,6 +63,10 @@ These are the rules the existing blocks follow; a review will hold new code to t
   Dependabot refreshes the pins.
 - Binaries installed inside a run are version pinned and checksum verified against the
   values published with their release.
+- Jobs run on a numbered runner image (`ubuntu-24.04`), never `ubuntu-latest`, so a runner
+  change is an explicit, reviewed bump.
+- Tool version inputs default to a pinned version, bumped centrally in the block, never
+  `latest`.
 - `permissions:` declares the minimum, starting from `contents: read`. If a block must
   inherit the caller's token (see `docker-build`), the reason is documented in the file
   and in the block's page.

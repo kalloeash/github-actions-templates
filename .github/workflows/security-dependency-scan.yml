@@ -43,7 +43,7 @@ permissions:
 jobs:
   scan:
     name: dependency scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A cold NVD cache makes the database update slow; generous but bounded.
     timeout-minutes: 45
     steps:

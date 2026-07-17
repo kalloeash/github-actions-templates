@@ -14,6 +14,9 @@ for security reports.
   pinned and checksum verified against the values published with their releases. The OWASP
   Dependency-Check container image is pinned by digest. Dependabot does not cover these;
   they are reviewed and bumped by hand.
+- Workflow jobs run on numbered runner images (`ubuntu-24.04`), and tool version inputs
+  default to pinned versions bumped centrally, so nothing in a run floats to whatever is
+  newest.
 - Releases are immutable: a published release tag stays bound to its commit.
 - Consumers should pin to the moving major tag (`@v0` today), to an exact release tag, or
   to a full commit SHA, never to `@main`. A commit SHA is the only immutable reference.

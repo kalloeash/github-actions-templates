@@ -19,7 +19,7 @@ concurrency:
 jobs:
   release:
     name: release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # contents: write creates the GitHub Release and moves the floating major tag.
     permissions:

@@ -9,13 +9,13 @@ on:
   workflow_call:
     inputs:
       terraform-version:
-        description: Terraform version passed to setup-terraform. "latest" installs the newest release.
+        description: Terraform version passed to setup-terraform. The default is pinned and bumped centrally; override it to match your project.
         type: string
-        default: latest
+        default: "1.15.8"
       tflint-version:
-        description: tflint version passed to setup-tflint. "latest" installs the newest release.
+        description: tflint version passed to setup-tflint. The default is pinned and bumped centrally; override it to match your project.
         type: string
-        default: latest
+        default: "v0.63.1"
       directories:
         description: >-
           Newline-separated list of root configuration directories to validate. Defaults to the
@@ -29,7 +29,7 @@ permissions:
 jobs:
   check:
     name: format, validate, and lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
