@@ -38,6 +38,22 @@ on:
         description: Buildx GHA cache scope. Empty uses the calling repository.
         type: string
         default: ""
+      provenance:
+        description: Attach Buildx SLSA provenance (mode=max) to the pushed image. Applies only when push is true.
+        type: boolean
+        default: false
+      sbom:
+        description: Attach a software bill of materials to the pushed image. Applies only when push is true.
+        type: boolean
+        default: false
+      attest:
+        description: Sign and store a GitHub build provenance attestation for the pushed image. Needs push true, image-name, and extra caller permissions; see the block's page.
+        type: boolean
+        default: false
+      image-name:
+        description: Fully qualified image name without a tag, for example "ghcr.io/owner/app". Required when attest is true.
+        type: string
+        default: ""
     secrets:
       REGISTRY_USERNAME:
         description: Registry login user. Empty uses the workflow's GitHub identity, which authenticates GHCR only.
@@ -47,9 +63,10 @@ on:
         required: false
 
 # No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
-# contents: read to build, and adds packages: write on the calling job when push is true. A
-# fixed permissions block cannot serve both the push and no-push callers, because a called
-# workflow that requests more than the caller granted fails the run at startup.
+# contents: read to build, adds packages: write on the calling job when push is true, and
+# adds id-token: write plus attestations: write when attest is true. A fixed permissions
+# block cannot serve all modes, because a called workflow that requests more than the
+# caller granted fails the run at startup.
 
 jobs:
   build:
@@ -71,6 +88,22 @@ jobs:
               exit 1
               ;;
           esac
+      # An attestation binds to the digest of a pushed image, so attest without push (or
+      # without the image name to verify against) can only fail later; fail early instead.
+      - name: Guard the attestation inputs
+        if: ${{ inputs.attest }}
+        env:
+          PUSH: ${{ inputs.push }}
+          IMAGE_NAME: ${{ inputs.image-name }}
+        run: |
+          if [ "$PUSH" != "true" ]; then
+            echo "::error::attest needs push true; the attestation binds to the pushed image digest."
+            exit 1
+          fi
+          if [ -z "$IMAGE_NAME" ]; then
+            echo "::error::attest needs image-name, the fully qualified image without a tag."
+            exit 1
+          fi
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
@@ -83,6 +116,7 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME || github.actor }}
           password: ${{ secrets.REGISTRY_PASSWORD || github.token }}
       - name: Build
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ${{ inputs.context }}
@@ -92,7 +126,21 @@ jobs:
           tags: ${{ inputs.tags }}
           labels: ${{ inputs.labels }}
           platforms: ${{ inputs.platforms }}
+          # Empty string leaves the action's default behavior untouched when the inputs
+          # are off; attestations only apply to pushed images, never to a local load.
+          provenance: ${{ (inputs.push && inputs.provenance && 'mode=max') || '' }}
+          sbom: ${{ (inputs.push && inputs.sbom && 'true') || '' }}
           # github.repository, not github.event.repository.name: the event payload has no
           # repository object on some triggers (schedule), which would yield an empty scope.
           cache-from: type=gha,scope=${{ inputs.cache-scope || github.repository }}
           cache-to: type=gha,scope=${{ inputs.cache-scope || github.repository }},mode=max
+      # Signs a SLSA provenance statement binding the pushed digest to this workflow run
+      # and stores it with GitHub and in the registry. Verify with:
+      # gh attestation verify oci://<image>:<tag> --owner <owner>
+      - name: Attest build provenance
+        if: ${{ inputs.push && inputs.attest }}
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ${{ inputs.image-name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
