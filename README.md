@@ -54,6 +54,8 @@ prefix rather than a folder.
 | Block | Purpose |
 |-------|---------|
 | [terraform-format-validate-lint](docs/blocks/terraform-format-validate-lint.md) | Format-check, validate, and lint Terraform configuration. |
+| [terraform-plan](docs/blocks/terraform-plan.md) | Plan a root configuration, read-only by default, with an optional saved plan artifact and Azure OIDC login. |
+| [terraform-apply](docs/blocks/terraform-apply.md) | Apply the saved plan inside a caller-owned protected environment. |
 
 ### Security
 

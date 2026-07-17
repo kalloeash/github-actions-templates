@@ -1,0 +1,204 @@
+# Initialize a root configuration and produce a Terraform plan. Read-only by default: a
+# speculative plan on a pull request only reads state, and taking the state lock would make
+# parallel pull-request plans queue behind each other for nothing. The plan output lands in
+# the job step summary; when artifact-name is set the binary plan file is uploaded, with a
+# metadata file binding it to this commit, so terraform-apply can apply exactly what was
+# reviewed. Artifacts of a public repository are downloadable by anyone, so artifact mode on
+# a public repository is refused unless the caller opts in. The Azure inputs are optional:
+# when set, the job logs in with OIDC workload identity federation, no stored secrets. The
+# block never touches network rules; the state backend must be reachable from GitHub-hosted
+# runners, see the network access section of the block's page.
+name: terraform-plan
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Root configuration directory to plan.
+        type: string
+        default: "."
+      terraform-version:
+        description: Terraform version passed to setup-terraform. The default is pinned and bumped centrally; override it to match your project.
+        type: string
+        default: "1.15.8"
+      backend-config:
+        description: Backend config file passed to init, relative to working-directory. Empty skips the flag.
+        type: string
+        default: ""
+      variables:
+        description: Newline-separated Terraform variable assignments in tfvars syntax, written to an auto-loaded tfvars file before planning. For non-secret values that live outside the repository, such as repository variables. Never pass secrets; plans, logs, and state expose them.
+        type: string
+        default: ""
+      lock:
+        description: Take the state lock during plan. Off by default because a speculative plan only reads state. Locking needs write access on the state blob, which a read-only plan identity does not have.
+        type: boolean
+        default: false
+      artifact-name:
+        description: When set, the plan is saved with -out and uploaded as an artifact under this name for terraform-apply, together with a metadata file binding it to this commit.
+        type: string
+        default: ""
+      artifact-retention-days:
+        description: Retention for the plan artifact. Short by default because plan files can contain sensitive values in clear text.
+        type: number
+        default: 1
+      allow-artifact-on-public-repo:
+        description: Artifacts of a public repository are downloadable by anyone, and a plan file can contain sensitive values and a copy of state. Setting this true accepts that exposure; leaving it false refuses artifact mode on a public repository.
+        type: boolean
+        default: false
+      write-step-summary:
+        description: Write the plan output to the job step summary. The output is also in the job log; turn this off to keep it out of the summary page.
+        type: boolean
+        default: true
+      azure-client-id:
+        description: Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all.
+        type: string
+        default: ""
+      azure-tenant-id:
+        description: Tenant id for the OIDC login.
+        type: string
+        default: ""
+      azure-subscription-id:
+        description: Subscription id for the OIDC login.
+        type: string
+        default: ""
+    outputs:
+      changes:
+        description: Whether the plan contains changes, "true" or "false".
+        value: ${{ jobs.plan.outputs.changes }}
+
+# No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
+# contents: read, and adds id-token: write on the calling job when the azure inputs are set,
+# because the OIDC login mints a token. A fixed permissions block cannot serve both modes,
+# because a called workflow that requests more than the caller granted fails the run at
+# startup.
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # Read by the azurerm provider and backend only; harmless when the azure inputs are
+      # empty and the configuration does not use them.
+      ARM_CLIENT_ID: ${{ inputs.azure-client-id }}
+      ARM_TENANT_ID: ${{ inputs.azure-tenant-id }}
+      ARM_SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+      ARM_USE_OIDC: ${{ inputs.azure-client-id != '' }}
+      ARM_USE_AZUREAD: ${{ inputs.azure-client-id != '' }}
+      TF_IN_AUTOMATION: "1"
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+    steps:
+      # The azure inputs travel together; a partial set can only fail later with a
+      # confusing provider error. Artifact mode on a public repository publishes a file
+      # that can contain secrets, so it needs the explicit opt-in. Both are cheaper to
+      # refuse here than to debug later.
+      - name: Guard the inputs
+        env:
+          CLIENT_ID: ${{ inputs.azure-client-id }}
+          TENANT_ID: ${{ inputs.azure-tenant-id }}
+          SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          ALLOW_PUBLIC: ${{ inputs.allow-artifact-on-public-repo }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if { [ -n "$CLIENT_ID" ] || [ -n "$TENANT_ID" ] || [ -n "$SUBSCRIPTION_ID" ]; } &&
+            { [ -z "$CLIENT_ID" ] || [ -z "$TENANT_ID" ] || [ -z "$SUBSCRIPTION_ID" ]; }; then
+            echo "::error::set azure-client-id, azure-tenant-id, and azure-subscription-id together, or none of them."
+            exit 1
+          fi
+          if [ -n "$ARTIFACT_NAME" ] && [ "$ALLOW_PUBLIC" != "true" ]; then
+            VISIBILITY="$(gh api "repos/$REPO" --jq .visibility)"
+            if [ "$VISIBILITY" = "public" ]; then
+              echo "::error::this repository is public, and a plan artifact can contain sensitive values readable by anyone. Set allow-artifact-on-public-repo to true only if the plan is known to be safe to publish."
+              exit 1
+            fi
+          fi
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Log in to Azure
+        if: ${{ inputs.azure-client-id != '' }}
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ inputs.azure-client-id }}
+          tenant-id: ${{ inputs.azure-tenant-id }}
+          subscription-id: ${{ inputs.azure-subscription-id }}
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          # The wrapper rewrites stdout and exit codes; the plan step reads both itself.
+          terraform_wrapper: false
+      - name: Write the variables file
+        if: ${{ inputs.variables != '' }}
+        env:
+          DIR: ${{ inputs.working-directory }}
+          VARIABLES: ${{ inputs.variables }}
+        run: printf '%s\n' "$VARIABLES" >"$DIR/terraform-plan.auto.tfvars"
+      - name: Init
+        env:
+          DIR: ${{ inputs.working-directory }}
+          BACKEND_CONFIG: ${{ inputs.backend-config }}
+        run: |
+          if [ -n "$BACKEND_CONFIG" ]; then
+            terraform -chdir="$DIR" init -input=false -backend-config="$BACKEND_CONFIG"
+          else
+            terraform -chdir="$DIR" init -input=false
+          fi
+      - name: Plan
+        id: plan
+        env:
+          DIR: ${{ inputs.working-directory }}
+          LOCK: ${{ inputs.lock }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          TF_VERSION: ${{ inputs.terraform-version }}
+        run: |
+          set -- -input=false -no-color -detailed-exitcode "-lock=$LOCK"
+          if [ -n "$ARTIFACT_NAME" ]; then
+            set -- "$@" -out="$RUNNER_TEMP/tfplan"
+          fi
+          code=0
+          terraform -chdir="$DIR" plan "$@" >"$RUNNER_TEMP/plan.txt" 2>&1 || code=$?
+          cat "$RUNNER_TEMP/plan.txt"
+          # detailed-exitcode: 0 is a clean no-change plan, 2 is a clean plan with changes.
+          case "$code" in
+            0) echo "changes=false" >>"$GITHUB_OUTPUT" ;;
+            2) echo "changes=true" >>"$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+          # The metadata binds the plan to this commit and configuration, so the apply can
+          # verify it executes the reviewed bytes against the reviewed code.
+          if [ -n "$ARTIFACT_NAME" ]; then
+            {
+              echo "commit=$GITHUB_SHA"
+              echo "terraform-version=$TF_VERSION"
+              echo "directory=$DIR"
+              echo "tfplan-sha256=$(sha256sum "$RUNNER_TEMP/tfplan" | cut -d' ' -f1)"
+            } >"$RUNNER_TEMP/tfplan.meta"
+          fi
+      - name: Write the plan to the step summary
+        if: ${{ always() && inputs.write-step-summary }}
+        env:
+          DIR: ${{ inputs.working-directory }}
+        run: |
+          [ -f "$RUNNER_TEMP/plan.txt" ] || exit 0
+          {
+            echo "## terraform plan: $DIR"
+            echo '```'
+            head -c 60000 "$RUNNER_TEMP/plan.txt"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [ "$(wc -c <"$RUNNER_TEMP/plan.txt")" -gt 60000 ]; then
+            echo "The plan output was truncated; the full output is in the job log." >>"$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload the plan artifact
+        if: ${{ inputs.artifact-name != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: |
+            ${{ runner.temp }}/tfplan
+            ${{ runner.temp }}/tfplan.meta
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: error
