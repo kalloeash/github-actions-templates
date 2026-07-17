@@ -22,8 +22,9 @@ updates:
     directory: /tests/node
     schedule:
       interval: weekly
+    # The fixtures prefix keeps these bumps out of the changelog; see cliff.toml.
     commit-message:
-      prefix: chore
+      prefix: chore(fixtures)
     groups:
       npm-minor-and-patch:
         applies-to: version-updates
@@ -35,8 +36,9 @@ updates:
     directory: /tests/dotnet
     schedule:
       interval: weekly
+    # The fixtures prefix keeps these bumps out of the changelog; see cliff.toml.
     commit-message:
-      prefix: chore
+      prefix: chore(fixtures)
     groups:
       nuget-minor-and-patch:
         applies-to: version-updates

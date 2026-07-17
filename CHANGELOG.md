@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-17
+
+### Added
+
+- Add self-tests that run each block against a fixture project (#25)
+
+### Changed
+
+- Bump actions/setup-node from 6.4.0 to 7.0.0 (#27)
+- Bump actions/setup-dotnet from 5.4.0 to 6.0.0 (#28)
+- Bump eslint from 9.39.5 to 10.7.0 in /tests/node (#29)
+- Bump vitest from 3.2.7 to 4.1.10 in /tests/node (#30)
+- Bump @eslint/js from 9.39.5 to 10.0.1 in /tests/node (#31)
+- Bump xunit from 2.9.2 to 2.9.3 (#34)
+- Bump Microsoft.NET.Test.Sdk from 17.12.0 to 18.8.1 (#33)
+- Bump xunit.runner.visualstudio from 2.8.2 to 3.1.5 (#35)
+- Group dependabot minor and patch updates (#37)
+
+### Fixed
+
+- Pin runner images and terraform tool version defaults (#36)
+
 ## [0.3.0] - 2026-07-12
 
 ### Added

@@ -74,6 +74,8 @@ These are the rules the existing blocks follow; a review will hold new code to t
 - Every job has `timeout-minutes`.
 - Consumer-specific values are inputs with sensible defaults; nothing project-specific is
   hardcoded.
+- Removing a block is its own commit, worded `<type>: remove <block>`, so the removal gets
+  its own changelog entry under Removed.
 - Write plainly: short, factual sentences in docs, comments, and commit messages.
 
 ## Reporting problems
