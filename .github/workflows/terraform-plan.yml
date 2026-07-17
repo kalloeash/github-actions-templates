@@ -1,11 +1,13 @@
 # Initialize a root configuration and produce a Terraform plan. Read-only by default: a
 # speculative plan on a pull request only reads state, and taking the state lock would make
 # parallel pull-request plans queue behind each other for nothing. The plan output lands in
-# the job step summary; when artifact-name is set the binary plan file is uploaded so
-# terraform-apply can apply exactly what was reviewed. The Azure inputs are optional: when
-# set, the job logs in with OIDC workload identity federation, no stored secrets, and can
-# hold open a just-in-time firewall rule on the state storage account for the duration of
-# the job.
+# the job step summary; when artifact-name is set the binary plan file is uploaded, with a
+# metadata file binding it to this commit, so terraform-apply can apply exactly what was
+# reviewed. Artifacts of a public repository are downloadable by anyone, so artifact mode on
+# a public repository is refused unless the caller opts in. The Azure inputs are optional:
+# when set, the job logs in with OIDC workload identity federation, no stored secrets, and
+# holds open a just-in-time firewall rule on the state storage account through the shared
+# state-firewall-access action.
 name: terraform-plan
 
 on:
@@ -23,18 +25,30 @@ on:
         description: Backend config file passed to init, relative to working-directory. Empty skips the flag.
         type: string
         default: ""
+      variables:
+        description: Newline-separated Terraform variable assignments in tfvars syntax, written to an auto-loaded tfvars file before planning. For values that live outside the repository, such as repository variables.
+        type: string
+        default: ""
       lock:
-        description: Take the state lock during plan. Off by default because a speculative plan only reads state; turn it on when the plan feeds an apply that must not race another writer.
+        description: Take the state lock during plan. Off by default because a speculative plan only reads state. Locking needs write access on the state blob, which a read-only plan identity does not have.
         type: boolean
         default: false
       artifact-name:
-        description: When set, the plan is saved with -out and uploaded as an artifact under this name for terraform-apply.
+        description: When set, the plan is saved with -out and uploaded as an artifact under this name for terraform-apply, together with a metadata file binding it to this commit.
         type: string
         default: ""
       artifact-retention-days:
         description: Retention for the plan artifact. Short by default because plan files can contain sensitive values in clear text.
         type: number
         default: 1
+      allow-artifact-on-public-repo:
+        description: Artifacts of a public repository are downloadable by anyone, and a plan file can contain sensitive values and a copy of state. Setting this true accepts that exposure; leaving it false refuses artifact mode on a public repository.
+        type: boolean
+        default: false
+      write-step-summary:
+        description: Write the plan output to the job step summary. The output is also in the job log; turn this off to keep it out of the summary page.
+        type: boolean
+        default: true
       azure-client-id:
         description: Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all.
         type: string
@@ -87,15 +101,21 @@ jobs:
     outputs:
       changes: ${{ steps.plan.outputs.changes }}
     steps:
-      # The azure inputs travel together and the firewall inputs need them. A partial set
-      # can only fail later with a confusing provider error, so fail early instead.
-      - name: Guard the azure inputs
+      # The azure inputs travel together and the firewall inputs need them; a partial set
+      # can only fail later with a confusing provider error. Artifact mode on a public
+      # repository publishes a file that can contain secrets, so it needs the explicit
+      # opt-in. Both are cheaper to refuse here than to debug later.
+      - name: Guard the inputs
         env:
           CLIENT_ID: ${{ inputs.azure-client-id }}
           TENANT_ID: ${{ inputs.azure-tenant-id }}
           SUBSCRIPTION_ID: ${{ inputs.azure-subscription-id }}
           STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
           RESOURCE_GROUP: ${{ inputs.state-resource-group }}
+          ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          ALLOW_PUBLIC: ${{ inputs.allow-artifact-on-public-repo }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           if { [ -n "$CLIENT_ID" ] || [ -n "$TENANT_ID" ] || [ -n "$SUBSCRIPTION_ID" ]; } &&
             { [ -z "$CLIENT_ID" ] || [ -z "$TENANT_ID" ] || [ -z "$SUBSCRIPTION_ID" ]; }; then
@@ -112,8 +132,25 @@ jobs:
               exit 1
             fi
           fi
+          if [ -n "$ARTIFACT_NAME" ] && [ "$ALLOW_PUBLIC" != "true" ]; then
+            VISIBILITY="$(gh api "repos/$REPO" --jq .visibility)"
+            if [ "$VISIBILITY" = "public" ]; then
+              echo "::error::this repository is public, and a plan artifact can contain sensitive values readable by anyone. Set allow-artifact-on-public-repo to true only if the plan is known to be safe to publish."
+              exit 1
+            fi
+          fi
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          persist-credentials: false
+      # The catalog's own source, checked out at the exact commit of this workflow file,
+      # so the block and the firewall action can never drift apart.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: ${{ inputs.state-storage-account != '' }}
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .catalog
+          sparse-checkout: actions
           persist-credentials: false
       - name: Log in to Azure
         if: ${{ inputs.azure-client-id != '' }}
@@ -124,32 +161,23 @@ jobs:
           subscription-id: ${{ inputs.azure-subscription-id }}
       - name: Allow the runner through the state firewall
         if: ${{ inputs.state-storage-account != '' }}
-        env:
-          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
-          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
-          CONTAINER: ${{ inputs.state-container }}
-        run: |
-          RUNNER_IP="$(curl -fsS https://api.ipify.org)"
-          echo "RUNNER_IP=$RUNNER_IP" >>"$GITHUB_ENV"
-          az storage account network-rule add --account-name "$STORAGE_ACCOUNT" \
-            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none
-          # Rules propagate in seconds to minutes; poll the data plane until the rule is
-          # effective instead of guessing with a fixed sleep.
-          for attempt in $(seq 1 12); do
-            if az storage blob list --auth-mode login --account-name "$STORAGE_ACCOUNT" \
-              --container-name "$CONTAINER" --num-results 1 --output none 2>/dev/null; then
-              echo "state reachable after $attempt attempts"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::the state storage account is still unreachable after three minutes."
-          exit 1
+        uses: ./.catalog/actions/state-firewall-access
+        with:
+          mode: allow
+          storage-account: ${{ inputs.state-storage-account }}
+          resource-group: ${{ inputs.state-resource-group }}
+          container: ${{ inputs.state-container }}
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ inputs.terraform-version }}
           # The wrapper rewrites stdout and exit codes; the plan step reads both itself.
           terraform_wrapper: false
+      - name: Write the variables file
+        if: ${{ inputs.variables != '' }}
+        env:
+          DIR: ${{ inputs.working-directory }}
+          VARIABLES: ${{ inputs.variables }}
+        run: printf '%s\n' "$VARIABLES" >"$DIR/terraform-plan.auto.tfvars"
       - name: Init
         env:
           DIR: ${{ inputs.working-directory }}
@@ -166,6 +194,7 @@ jobs:
           DIR: ${{ inputs.working-directory }}
           LOCK: ${{ inputs.lock }}
           ARTIFACT_NAME: ${{ inputs.artifact-name }}
+          TF_VERSION: ${{ inputs.terraform-version }}
         run: |
           set -- -input=false -no-color -detailed-exitcode "-lock=$LOCK"
           if [ -n "$ARTIFACT_NAME" ]; then
@@ -180,8 +209,18 @@ jobs:
             2) echo "changes=true" >>"$GITHUB_OUTPUT" ;;
             *) exit "$code" ;;
           esac
+          # The metadata binds the plan to this commit and configuration, so the apply can
+          # verify it executes the reviewed bytes against the reviewed code.
+          if [ -n "$ARTIFACT_NAME" ]; then
+            {
+              echo "commit=$GITHUB_SHA"
+              echo "terraform-version=$TF_VERSION"
+              echo "directory=$DIR"
+              echo "tfplan-sha256=$(sha256sum "$RUNNER_TEMP/tfplan" | cut -d' ' -f1)"
+            } >"$RUNNER_TEMP/tfplan.meta"
+          fi
       - name: Write the plan to the step summary
-        if: ${{ always() }}
+        if: ${{ always() && inputs.write-step-summary }}
         env:
           DIR: ${{ inputs.working-directory }}
         run: |
@@ -200,18 +239,18 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.artifact-name }}
-          path: ${{ runner.temp }}/tfplan
+          path: |
+            ${{ runner.temp }}/tfplan
+            ${{ runner.temp }}/tfplan.meta
           retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: error
-      # Removing an absent rule is a no-op, so this is safe on any failure path. A hard
-      # runner kill can still leak the rule; the firewall is owned by the consumer's own
-      # Terraform, so a leaked rule surfaces as drift on the next plan of that code.
       - name: Remove the runner from the state firewall
         if: ${{ always() && inputs.state-storage-account != '' }}
-        env:
-          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
-          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
-        run: |
-          [ -z "${RUNNER_IP:-}" ] && exit 0
-          az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" \
-            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none
+        uses: ./.catalog/actions/state-firewall-access
+        with:
+          mode: remove
+          storage-account: ${{ inputs.state-storage-account }}
+          resource-group: ${{ inputs.state-resource-group }}
+      - name: Remove the catalog checkout
+        if: ${{ always() && inputs.state-storage-account != '' }}
+        run: rm -rf .catalog

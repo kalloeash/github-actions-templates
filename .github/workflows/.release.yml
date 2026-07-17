@@ -92,6 +92,10 @@ jobs:
     with:
       working-directory: tests/terraform-deploy
       artifact-name: terraform-deploy-plan
+      # The catalog is public and the fixture plan holds nothing sensitive.
+      allow-artifact-on-public-repo: true
+      variables: |
+        environment = "selftest"
 
   terraform-apply:
     name: terraform apply

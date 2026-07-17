@@ -1,9 +1,11 @@
 # Apply the exact plan that terraform-plan saved. The job binds to a caller-owned GitHub
 # environment, so the consumer decides who approves an apply and from which branch; the
-# block itself never carries that policy. Locking stays on here, with a timeout instead of
-# a failure when another operation holds the lock, because an apply is the one writer the
-# lock exists for. The Azure and state firewall inputs work the same way as in
-# terraform-plan.
+# block itself never carries that policy. Before applying, the plan's metadata file is
+# checked: the plan must come from this commit, this directory, and this Terraform version,
+# and the plan bytes must match the recorded checksum. Locking stays on here, with a
+# timeout instead of a failure when another operation holds the lock, because an apply is
+# the one writer the lock exists for. The Azure and state firewall inputs work the same way
+# as in terraform-plan.
 name: terraform-apply
 
 on:
@@ -14,7 +16,7 @@ on:
         type: string
         default: "."
       terraform-version:
-        description: Terraform version passed to setup-terraform. Use the version that produced the plan; the default is pinned and bumped centrally.
+        description: Terraform version passed to setup-terraform. Must match the version that produced the plan; the default is pinned and bumped centrally.
         type: string
         default: "1.15.8"
       backend-config:
@@ -33,6 +35,10 @@ on:
         description: How long the apply waits for a busy state lock before failing.
         type: string
         default: "300s"
+      write-step-summary:
+        description: Write the apply output to the job step summary. The output is also in the job log; turn this off to keep it out of the summary page.
+        type: boolean
+        default: true
       azure-client-id:
         description: Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all.
         type: string
@@ -82,7 +88,7 @@ jobs:
     steps:
       # The azure inputs travel together and the firewall inputs need them. A partial set
       # can only fail later with a confusing provider error, so fail early instead.
-      - name: Guard the azure inputs
+      - name: Guard the inputs
         env:
           CLIENT_ID: ${{ inputs.azure-client-id }}
           TENANT_ID: ${{ inputs.azure-tenant-id }}
@@ -108,6 +114,48 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      # The catalog's own source, checked out at the exact commit of this workflow file,
+      # so the block and the firewall action can never drift apart.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        if: ${{ inputs.state-storage-account != '' }}
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .catalog
+          sparse-checkout: actions
+          persist-credentials: false
+      - name: Download the plan artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ runner.temp }}/plan-artifact
+      # The apply must execute the reviewed bytes against the reviewed code. Terraform
+      # rejects many incompatibilities itself; this makes the contract explicit and the
+      # failure diagnosable.
+      - name: Check the plan metadata
+        env:
+          DIR: ${{ inputs.working-directory }}
+          TF_VERSION: ${{ inputs.terraform-version }}
+        run: |
+          META="$RUNNER_TEMP/plan-artifact/tfplan.meta"
+          if [ ! -f "$META" ]; then
+            echo "::error::the artifact has no tfplan.meta; it was not produced by terraform-plan."
+            exit 1
+          fi
+          status=0
+          check() {
+            WANT="$2"
+            GOT="$(grep "^$1=" "$META" | cut -d= -f2-)"
+            if [ "$GOT" != "$WANT" ]; then
+              echo "::error::plan metadata mismatch for $1: the plan has \"$GOT\", this job has \"$WANT\"."
+              status=1
+            fi
+          }
+          check commit "$GITHUB_SHA"
+          check directory "$DIR"
+          check terraform-version "$TF_VERSION"
+          check tfplan-sha256 "$(sha256sum "$RUNNER_TEMP/plan-artifact/tfplan" | cut -d' ' -f1)"
+          exit "$status"
       - name: Log in to Azure
         if: ${{ inputs.azure-client-id != '' }}
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
@@ -117,27 +165,12 @@ jobs:
           subscription-id: ${{ inputs.azure-subscription-id }}
       - name: Allow the runner through the state firewall
         if: ${{ inputs.state-storage-account != '' }}
-        env:
-          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
-          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
-          CONTAINER: ${{ inputs.state-container }}
-        run: |
-          RUNNER_IP="$(curl -fsS https://api.ipify.org)"
-          echo "RUNNER_IP=$RUNNER_IP" >>"$GITHUB_ENV"
-          az storage account network-rule add --account-name "$STORAGE_ACCOUNT" \
-            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none
-          # Rules propagate in seconds to minutes; poll the data plane until the rule is
-          # effective instead of guessing with a fixed sleep.
-          for attempt in $(seq 1 12); do
-            if az storage blob list --auth-mode login --account-name "$STORAGE_ACCOUNT" \
-              --container-name "$CONTAINER" --num-results 1 --output none 2>/dev/null; then
-              echo "state reachable after $attempt attempts"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::the state storage account is still unreachable after three minutes."
-          exit 1
+        uses: ./.catalog/actions/state-firewall-access
+        with:
+          mode: allow
+          storage-account: ${{ inputs.state-storage-account }}
+          resource-group: ${{ inputs.state-resource-group }}
+          container: ${{ inputs.state-container }}
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: ${{ inputs.terraform-version }}
@@ -153,11 +186,6 @@ jobs:
           else
             terraform -chdir="$DIR" init -input=false
           fi
-      - name: Download the plan artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ inputs.artifact-name }}
-          path: ${{ runner.temp }}/plan-artifact
       - name: Apply
         env:
           DIR: ${{ inputs.working-directory }}
@@ -169,7 +197,7 @@ jobs:
           cat "$RUNNER_TEMP/apply.txt"
           exit "$code"
       - name: Write the apply output to the step summary
-        if: ${{ always() }}
+        if: ${{ always() && inputs.write-step-summary }}
         env:
           DIR: ${{ inputs.working-directory }}
         run: |
@@ -183,15 +211,13 @@ jobs:
           if [ "$(wc -c <"$RUNNER_TEMP/apply.txt")" -gt 60000 ]; then
             echo "The apply output was truncated; the full output is in the job log." >>"$GITHUB_STEP_SUMMARY"
           fi
-      # Removing an absent rule is a no-op, so this is safe on any failure path. A hard
-      # runner kill can still leak the rule; the firewall is owned by the consumer's own
-      # Terraform, so a leaked rule surfaces as drift on the next plan of that code.
       - name: Remove the runner from the state firewall
         if: ${{ always() && inputs.state-storage-account != '' }}
-        env:
-          STORAGE_ACCOUNT: ${{ inputs.state-storage-account }}
-          RESOURCE_GROUP: ${{ inputs.state-resource-group }}
-        run: |
-          [ -z "${RUNNER_IP:-}" ] && exit 0
-          az storage account network-rule remove --account-name "$STORAGE_ACCOUNT" \
-            --resource-group "$RESOURCE_GROUP" --ip-address "$RUNNER_IP" --output none
+        uses: ./.catalog/actions/state-firewall-access
+        with:
+          mode: remove
+          storage-account: ${{ inputs.state-storage-account }}
+          resource-group: ${{ inputs.state-resource-group }}
+      - name: Remove the catalog checkout
+        if: ${{ always() && inputs.state-storage-account != '' }}
+        run: rm -rf .catalog

@@ -2,10 +2,12 @@
 
 Apply the exact plan that [terraform-plan](terraform-plan.md) saved. The job binds to a
 caller-owned GitHub environment, so the consumer decides who approves an apply and from
-which branch; the block carries no policy of its own. Locking stays on, with a timeout
-instead of an immediate failure when another operation holds the lock, because an apply
-is the one writer the lock exists for. The Azure and state firewall inputs work the same
-way as in terraform-plan.
+which branch; the block carries no policy of its own. Before applying, the plan's
+metadata is checked: the plan must come from this commit, this directory, and this
+Terraform version, and the plan bytes must match the recorded checksum. Locking stays on,
+with a timeout instead of an immediate failure when another operation holds the lock,
+because an apply is the one writer the lock exists for. The Azure and state firewall
+inputs work the same way as in terraform-plan.
 
 ## Usage
 
@@ -37,7 +39,6 @@ jobs:
       working-directory: infra
       backend-config: backend.hcl
       artifact-name: infra-plan
-      lock: true
       azure-client-id: ${{ vars.AZURE_PLAN_CLIENT_ID }}
       azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
       azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
@@ -67,6 +68,20 @@ The environment (here `azure`) is configured in the consuming repository: requir
 reviewers, and a deployment branch policy restricted to `main`. Required reviewers are
 available for public repositories on every plan; private repositories need GitHub
 Enterprise for them.
+
+The plan job runs without the state lock on purpose: the apply refuses a saved plan
+whose state moved after planning, and the concurrency group keeps deploys in merge
+order, so the read-only plan identity stays read-only. See the lock note in
+[terraform-plan](terraform-plan.md).
+
+When the firewall inputs are used, every workflow that opens the firewall on the same
+storage account should share one concurrency scope: this deploy group, plus `needs:`
+chains between plan jobs inside the pull-request workflow, keep the account's rule
+collection single-writer within the repository. The shared
+[state-firewall-access](../../actions/state-firewall-access/README.md) action re-adds a
+clobbered rule as a second line of defense. Changes made outside GitHub Actions, or from
+other repositories using the same account, are outside that coordination; give each
+repository its own state storage account if that situation is real.
 
 ## Azure OIDC prerequisites
 
@@ -100,6 +115,7 @@ firewall role when the firewall inputs are used.
 | `artifact-name` | required | Name of the plan artifact uploaded by terraform-plan in the same run. |
 | `environment` | required | GitHub environment the apply job binds to. The consumer owns the environment and its protection rules. |
 | `lock-timeout` | `300s` | How long the apply waits for a busy state lock before failing. |
+| `write-step-summary` | `true` | Write the apply output to the job step summary. The output is also in the job log. |
 | `azure-client-id` | empty | Client id of the Azure identity for the OIDC login. Set all three azure inputs together or not at all. |
 | `azure-tenant-id` | empty | Tenant id for the OIDC login. |
 | `azure-subscription-id` | empty | Subscription id for the OIDC login. |
@@ -116,9 +132,11 @@ granted fails the run at startup.
 
 ## Notes
 
-- The job applies the saved binary plan, so what was reviewed is what runs; Terraform
-  refuses a plan whose state has moved since it was created. Pass the artifact from the
-  plan job of the same workflow run, as in the example.
+- The job applies the saved binary plan, so what was reviewed is what runs. The metadata
+  check enforces it: same commit, same directory, same Terraform version, same plan
+  bytes, or the job fails before touching state. Terraform additionally refuses a plan
+  whose state has moved since it was created. Pass the artifact from the plan job of the
+  same workflow run, as in the example.
 - Terraform validates a saved plan against the configuration and provider versions that
   produced it. Keep `working-directory`, `backend-config`, and `terraform-version`
   identical between the plan and apply calls.
