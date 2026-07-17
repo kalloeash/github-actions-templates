@@ -82,6 +82,10 @@ documentation tells callers exactly what to grant per mode.
   it directly, which exercises it on the same events. security-dependency-scan is the one
   block not exercised in the catalog: it needs an NVD API key and a long first run, so its
   proof stays with its consumers.
+- The release-verification workflow (`.verify-release.yml`) runs when a release is
+  published. On the release event, same-repo references resolve to the tagged commit, so
+  every self-tested block also executes at the exact code consumers pin, minutes after
+  publication. A failure opens an issue, so a bad release cannot pass silently.
 - gitleaks scans for secrets: on staged changes locally, and over the full history in CI,
   where the lint workflow calls the security-secret-scan block. The catalog consumes its
   own block, so the scan and the block's proof are one mechanism.
