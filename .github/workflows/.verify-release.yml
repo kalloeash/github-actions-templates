@@ -1,16 +1,21 @@
-# Internal release-verification workflow. Runs when a release is published: on the
-# release event, the same-repo job references below resolve to the tagged commit, so every
-# block executes at the exact code consumers pin, against the same fixtures the self-tests
-# use. This is the third layer of the testing model, between the pull-request self-test
-# and consumer adoption. A failure opens an issue, so a bad release cannot pass silently.
+# Internal release-verification workflow. Runs on the version tag push, alongside the
+# release workflow: on that event, the same-repo job references below resolve to the
+# tagged commit, so every block executes at the exact code consumers pin, against the same
+# fixtures the self-tests use. This is the third layer of the testing model, between the
+# pull-request self-test and consumer adoption. A failure opens an issue, so a bad release
+# cannot pass silently.
+# The trigger is the tag push, not the published release, because the release is created
+# by the release workflow with the default GITHUB_TOKEN, and events created with that
+# token never trigger other workflows.
 # security-secret-scan runs here even though .test.yml leaves it to the lint workflow,
-# because the lint workflow does not run on releases. security-dependency-scan is the one
+# because the lint workflow does not run on tags. security-dependency-scan is the one
 # block absent, for the reason the testing section of docs/architecture.md explains.
 name: verify-release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
   contents: read
@@ -76,7 +81,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh issue create --repo "$REPO" \
