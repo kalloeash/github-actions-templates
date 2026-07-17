@@ -1,0 +1,73 @@
+# Scan infrastructure configuration for misconfigurations with Trivy: Terraform,
+# Dockerfiles, Kubernetes manifests, Helm charts, and other config types Trivy detects in
+# the scan path. Named by purpose, not tool, so the scanner can change without a
+# consumer-breaking rename. The scan runs with the checks embedded in the pinned Trivy
+# binary (--skip-check-update), so a result is reproducible for a given block version and
+# new checks arrive through a reviewed version bump, never through a runtime download.
+name: security-iac-scan
+
+on:
+  workflow_call:
+    inputs:
+      scan-path:
+        description: Path to scan, relative to the repository root.
+        type: string
+        default: "."
+      severity:
+        description: Comma-separated severities that fail the run (UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL).
+        type: string
+        default: HIGH,CRITICAL
+      trivyignore:
+        description: Path to a .trivyignore file with suppressed finding IDs. Empty for none.
+        type: string
+        default: ""
+      skip-dirs:
+        description: Comma-separated directories to exclude from the scan. Empty for none.
+        type: string
+        default: ""
+      sarif-upload:
+        description: Upload results to GitHub code scanning. Requires code scanning on the repository (free on public repositories) and security-events write permission on the calling job.
+        type: boolean
+        default: false
+
+# No permissions block: this workflow inherits the caller's GITHUB_TOKEN. The caller grants
+# contents: read to scan, and adds security-events: write on the calling job when
+# sarif-upload is true. A fixed permissions block cannot serve both modes, because a called
+# workflow that requests more than the caller granted fails the run at startup.
+
+jobs:
+  scan:
+    name: iac scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      # Downloaded binaries are checksum-verified against the values published with the
+      # release, so a moved or tampered release asset fails the job instead of running.
+      - name: Install trivy
+        run: |
+          curl -sSfLo trivy.tar.gz https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz
+          echo "bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea  trivy.tar.gz" | sha256sum -c -
+          sudo tar -xzf trivy.tar.gz -C /usr/local/bin trivy
+          rm trivy.tar.gz
+      - name: Scan configuration
+        env:
+          SCAN_PATH: ${{ inputs.scan-path }}
+          SEVERITY: ${{ inputs.severity }}
+          TRIVYIGNORE: ${{ inputs.trivyignore }}
+          SKIP_DIRS: ${{ inputs.skip-dirs }}
+          SARIF: ${{ inputs.sarif-upload }}
+        run: |
+          args=(--skip-check-update --exit-code 1 --severity "$SEVERITY")
+          if [ -n "$TRIVYIGNORE" ]; then args+=(--ignorefile "$TRIVYIGNORE"); fi
+          if [ -n "$SKIP_DIRS" ]; then args+=(--skip-dirs "$SKIP_DIRS"); fi
+          if [ "$SARIF" = "true" ]; then args+=(--format sarif --output trivy-results.sarif); fi
+          trivy config "${args[@]}" "$SCAN_PATH"
+      # always() so findings that fail the gate still reach the code scanning dashboard.
+      - name: Upload results to code scanning
+        if: ${{ always() && inputs.sarif-upload }}
+        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        with:
+          sarif_file: trivy-results.sarif
