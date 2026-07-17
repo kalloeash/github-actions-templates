@@ -35,11 +35,13 @@ Conventional Commit messages with [git-cliff](https://git-cliff.org), configured
    The floating major tag is the only lightweight tag, moved by the release workflow.
 
 4. The [`.release.yml`](../.github/workflows/.release.yml) workflow runs on the tag. It
-   builds the release notes with git-cliff, publishes an immutable GitHub Release, and moves
-   the floating major tag (`vN`) to the released commit.
-5. The tag push also triggers [`.verify-release.yml`](../.github/workflows/.verify-release.yml),
-   which runs every block at the tagged commit against the fixtures. The release is done
-   when it is green; a failure opens an issue.
+   first runs every block except security-dependency-scan at the tagged commit against
+   the fixtures, and only when all of them are green builds the release notes with
+   git-cliff, publishes an immutable GitHub Release, and moves the floating major tag
+   (`vN`) to the released commit.
+5. A verification failure opens an issue instead: the release is not published and the
+   floating major tag does not move, so consumers cannot pick the version up. Fix forward
+   and cut the next version; full release tags are immutable once pushed.
 
 ## Notes
 
