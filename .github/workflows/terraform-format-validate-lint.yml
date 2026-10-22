@@ -11,11 +11,11 @@ on:
       terraform-version:
         description: Terraform version passed to setup-terraform. The default is pinned and bumped centrally; override it to match your project.
         type: string
-        default: "1.15.8"
+        default: "1.16.6"
       tflint-version:
         description: tflint version passed to setup-tflint. The default is pinned and bumped centrally; override it to match your project.
         type: string
-        default: "v0.63.1"
+        default: "v0.64.0"
       directories:
         description: >-
           Newline-separated list of root configuration directories to validate. Defaults to the

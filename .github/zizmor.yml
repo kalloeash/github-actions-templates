@@ -1,0 +1,6 @@
+# The self-repository audit asks for the `$/` uses syntax for same-repository references.
+# actionlint does not parse that syntax yet and gates every workflow here, so the catalog
+# keeps `./` until it does.
+rules:
+  self-repository:
+    disable: true

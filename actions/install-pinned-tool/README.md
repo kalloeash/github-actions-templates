@@ -30,9 +30,9 @@ nested inside the archive:
 - uses: ./actions/install-pinned-tool
   with:
     tool: git-cliff
-    url: https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
-    sha512: e716cce3a07dda41b1e370d6afbd7a59eb3d4739509fb7856aeec8da2be28c0396584e29e106141c1a1c535c1827dbc1f60417524f5cfb1da9e11f700bd00f30
-    archive-member: git-cliff-2.13.1/git-cliff
+    url: https://github.com/orhun/git-cliff/releases/download/v2.14.2/git-cliff-2.14.2-x86_64-unknown-linux-gnu.tar.gz
+    sha512: 26d1f7c8ea2400f2ccb0b2e7f321635f600b583bf4cd1f7afaa5e8c24068ad1088a2504e0a4d9f4333d4bb20a80329327d9462634343ee3af91e1a7fbdc6f18a
+    archive-member: git-cliff-2.14.2/git-cliff
 ```
 
 A URL that does not end in `.tar.gz` or `.tgz` is installed as the binary itself, for

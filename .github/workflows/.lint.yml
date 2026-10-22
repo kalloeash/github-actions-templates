@@ -24,17 +24,17 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       # Version and checksum live in the action's pin table.
       - name: Install actionlint
         uses: ./actions/install-pinned-tool
         with:
           tool: actionlint
       - name: Install zizmor
-        run: pip install zizmor==1.26.1
+        run: pip install zizmor==1.31.1
       - name: Run pre-commit
         run: |
-          pip install pre-commit==4.6.0
+          pip install pre-commit==4.7.0
           SKIP=gitleaks pre-commit run --all-files --show-diff-on-failure
 
   # Calls the catalog's own block: one mechanism serves as the scan and as the block's

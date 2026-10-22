@@ -72,9 +72,9 @@ runs:
               URL="https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64"
               SHA256="160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b"
               ;;
-            trivy) # v0.72.0
-              URL="https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz"
-              SHA256="bbb64b9695866ce4a7a8f5c9592002c5961cab378577fa3f8a040df362b9b2ea"
+            trivy) # v0.76.0
+              URL="https://github.com/aquasecurity/trivy/releases/download/v0.76.0/trivy_0.76.0_Linux-64bit.tar.gz"
+              SHA256="e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7"
               ;;
             *)
               echo "::error::'$TOOL' is not in the pin table; pass url and sha256 or sha512."

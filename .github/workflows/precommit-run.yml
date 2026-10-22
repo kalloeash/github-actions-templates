@@ -9,7 +9,7 @@ on:
       python-version:
         description: Python version passed to actions/setup-python.
         type: string
-        default: "3.13"
+        default: "3.14"
       config:
         description: pre-commit configuration file.
         type: string
@@ -48,5 +48,5 @@ jobs:
           restore-keys: pre-commit-${{ runner.os }}-
       - name: Run pre-commit
         run: |
-          pip install pre-commit==4.6.0
+          pip install pre-commit==4.7.0
           pre-commit run --all-files --show-diff-on-failure --config "$CONFIG"

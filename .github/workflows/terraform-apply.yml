@@ -18,7 +18,7 @@ on:
       terraform-version:
         description: Terraform version passed to setup-terraform. Must match the version that produced the plan; the default is pinned and bumped centrally.
         type: string
-        default: "1.15.8"
+        default: "1.16.6"
       backend-config:
         description: Backend config file passed to init, relative to working-directory. Empty skips the flag.
         type: string

@@ -100,7 +100,7 @@ The apply identity holds `Contributor` on the scope it manages and
 | Name | Default | Description |
 |------|---------|-------------|
 | `working-directory` | `.` | Root configuration directory to apply. Must match the plan. |
-| `terraform-version` | `1.15.8` | Terraform version passed to setup-terraform. Use the version that produced the plan. |
+| `terraform-version` | `1.16.6` | Terraform version passed to setup-terraform. Use the version that produced the plan. |
 | `backend-config` | empty | Backend config file passed to `init`, relative to `working-directory`. Empty skips the flag. |
 | `artifact-name` | required | Name of the plan artifact uploaded by terraform-plan in the same run. |
 | `environment` | required | GitHub environment the apply job binds to. The consumer owns the environment and its protection rules. |
