@@ -1,7 +1,8 @@
 # install-pinned-tool
 
-Download a release archive, verify its checksum against the value published with the
-release, and install a single binary from it. Every CLI tool the catalog's workflows use
+Download a release asset, verify its checksum against the value published with the
+release, and install a single binary from it. The asset is either a `.tar.gz` archive
+holding the binary or the binary itself. Every CLI tool the catalog's workflows use
 is installed through this action, so the version and checksum for each tool live in one
 pin table instead of being repeated per workflow.
 
@@ -21,7 +22,7 @@ reviewed change that reaches every workflow at once:
 
 ### Explicit mode
 
-For anything not in the table, pass the archive URL and its published checksum. Use
+For anything not in the table, pass the asset URL and its published checksum. Use
 `sha512` when a project publishes SHA-512 values, and `archive-member` when the binary is
 nested inside the archive:
 
@@ -34,15 +35,26 @@ nested inside the archive:
     archive-member: git-cliff-2.13.1/git-cliff
 ```
 
+A URL that does not end in `.tar.gz` or `.tgz` is installed as the binary itself, for
+projects that publish bare binaries. `archive-member` does not apply and is rejected:
+
+```yaml
+- uses: ./actions/install-pinned-tool
+  with:
+    tool: osv-scanner
+    url: https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+    sha256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+```
+
 ## Inputs
 
 | Name | Default | Description |
 |------|---------|-------------|
 | `tool` | required | Binary to install. Table tools: `actionlint`, `gitleaks`, `trivy`. Any other name requires `url` and a checksum. |
-| `url` | none | Release archive URL. Overrides the pin table. |
-| `sha256` | none | SHA-256 checksum of the archive. Required with `url` unless `sha512` is given. |
+| `url` | none | Release asset URL. Overrides the pin table. `.tar.gz` and `.tgz` URLs are archives; any other URL is the binary itself. |
+| `sha256` | none | SHA-256 checksum of the asset. Required with `url` unless `sha512` is given. |
 | `sha512` | none | SHA-512 checksum, for releases that publish SHA-512 values. |
-| `archive-member` | tool name | Path of the binary inside the archive. |
+| `archive-member` | tool name | Path of the binary inside a `.tar.gz` archive. Rejected for a single-binary asset. |
 
 ## How a reusable workflow references this action
 
@@ -82,6 +94,9 @@ skip all of that and use the local `./actions/...` path directly.
 - Only the named archive member is extracted; the archive is never unpacked wholesale
   into the working tree. `archive-member` must be a relative path inside the archive;
   absolute paths and `..` segments are rejected.
+- A single-binary asset is verified and installed as it is. Giving `archive-member` with
+  such a URL is rejected, so a mistyped archive URL fails instead of installing the
+  archive as a binary.
 - The download retries transient failures three times; a changed or missing asset still
   fails.
 - Linux amd64 runners only, matching the catalog's blocks.

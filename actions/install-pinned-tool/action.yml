@@ -1,9 +1,10 @@
 name: install-pinned-tool
 description: >-
-  Download a release archive, verify its checksum against the value published with the
-  release, and install a single binary from it. The pin table inside the action owns the
-  version, URL, and checksum for the catalog's tools; explicit url and checksum inputs
-  override the table for anything else.
+  Download a release asset, verify its checksum against the value published with the
+  release, and install a single binary from it. The asset is a .tar.gz archive holding
+  the binary, or the binary itself. The pin table inside the action owns the version,
+  URL, and checksum for the catalog's tools; explicit url and checksum inputs override
+  the table for anything else.
 inputs:
   tool:
     description: >-
@@ -11,21 +12,25 @@ inputs:
       other name requires url and a checksum.
     required: true
   url:
-    description: Release archive URL. Overrides the pin table.
+    description: >-
+      Release asset URL. Overrides the pin table. A URL ending in .tar.gz or .tgz is an
+      archive; any other URL is the binary itself.
     required: false
     default: ""
   sha256:
-    description: SHA-256 checksum of the archive. Required with url unless sha512 is given.
+    description: SHA-256 checksum of the asset. Required with url unless sha512 is given.
     required: false
     default: ""
   sha512:
     description: >-
-      SHA-512 checksum of the archive, for releases that publish SHA-512 values. Give one
+      SHA-512 checksum of the asset, for releases that publish SHA-512 values. Give one
       checksum, not both.
     required: false
     default: ""
   archive-member:
-    description: Path of the binary inside the archive. Defaults to the tool name.
+    description: >-
+      Path of the binary inside a .tar.gz archive. Defaults to the tool name. Rejected for
+      a single-binary asset.
     required: false
     default: ""
 runs:
@@ -77,27 +82,42 @@ runs:
           echo "::error::url needs sha256 or sha512."
           exit 1
         fi
-        MEMBER="${MEMBER:-$TOOL}"
-        # The member is extracted into, and installed from, the temporary directory; a
-        # path that escapes it must never reach tar or install.
-        case "$MEMBER" in
-          /* | ../* | */../* | */.. | ..)
-            echo "::error::archive-member must be a relative path inside the archive."
-            exit 1
-            ;;
+        # A .tar.gz asset is an archive holding the binary; any other asset is the binary.
+        case "$URL" in
+          *.tar.gz | *.tgz) ARCHIVE=true ;;
+          *) ARCHIVE=false ;;
         esac
+        if [ "$ARCHIVE" = true ]; then
+          MEMBER="${MEMBER:-$TOOL}"
+          # The member is extracted into, and installed from, the temporary directory; a
+          # path that escapes it must never reach tar or install.
+          case "$MEMBER" in
+            /* | ../* | */../* | */.. | ..)
+              echo "::error::archive-member must be a relative path inside the archive."
+              exit 1
+              ;;
+          esac
+        elif [ -n "$MEMBER" ]; then
+          echo "::error::archive-member applies to .tar.gz archives; this url is a single binary."
+          exit 1
+        fi
         tmp="$(mktemp -d)"
         trap 'rm -rf "$tmp"' EXIT
         # --retry only covers transient failures; a changed or missing asset still fails.
-        curl -sSfL --retry 3 -o "$tmp/archive.tar.gz" "$URL"
+        curl -sSfL --retry 3 -o "$tmp/download" "$URL"
         # Compared by value, so a moved or tampered release asset fails the job instead
         # of running.
         if [ -n "$SHA256" ]; then
-          echo "$SHA256  $tmp/archive.tar.gz" | sha256sum -c -
+          echo "$SHA256  $tmp/download" | sha256sum -c -
         else
-          echo "$SHA512  $tmp/archive.tar.gz" | sha512sum -c -
+          echo "$SHA512  $tmp/download" | sha512sum -c -
         fi
-        # Extract only the named member, never the whole archive.
-        tar -xzf "$tmp/archive.tar.gz" -C "$tmp" "$MEMBER"
-        sudo install -m 0755 "$tmp/$MEMBER" "/usr/local/bin/$TOOL"
+        if [ "$ARCHIVE" = true ]; then
+          # Extract only the named member, never the whole archive.
+          mkdir "$tmp/extract"
+          tar -xzf "$tmp/download" -C "$tmp/extract" "$MEMBER"
+          sudo install -m 0755 "$tmp/extract/$MEMBER" "/usr/local/bin/$TOOL"
+        else
+          sudo install -m 0755 "$tmp/download" "/usr/local/bin/$TOOL"
+        fi
         command -v "$TOOL"

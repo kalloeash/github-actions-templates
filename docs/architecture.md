@@ -14,7 +14,7 @@ A composite action is a bundle of steps that runs inside another job. It is used
 mechanics like "set up the runtime and restore the cache". A composite action lives in its
 own folder with an `action.yml` and its own README. The catalog holds one:
 [install-pinned-tool](../actions/install-pinned-tool/README.md), which downloads a release
-archive, verifies its checksum, and installs one binary. It arrived when a fourth workflow
+asset, verifies its checksum, and installs one binary from it. It arrived when a fourth workflow
 repeated the same install steps, which is the threshold this section always set: a
 composite action appears when blocks need the same steps inside their jobs, not before.
 
