@@ -2,11 +2,15 @@ version: 2
 
 # Minor and patch updates arrive grouped, one pull request per ecosystem per week. Major
 # updates arrive individually, so each one gets its own review and its own self-test run.
+# A release is proposed once it is seven days old, so a compromised or broken release has
+# time to be pulled first. Security updates are not delayed.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: chore
     groups:
@@ -22,6 +26,8 @@ updates:
     directory: /tests/node
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     # The fixtures prefix keeps these bumps out of the changelog; see cliff.toml.
     commit-message:
       prefix: chore(fixtures)
@@ -36,6 +42,8 @@ updates:
     directory: /tests/dotnet
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     # The fixtures prefix keeps these bumps out of the changelog; see cliff.toml.
     commit-message:
       prefix: chore(fixtures)
