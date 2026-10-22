@@ -36,10 +36,10 @@ Conventional Commit messages with [git-cliff](https://git-cliff.org), configured
 
 4. The [`.release.yml`](../.github/workflows/.release.yml) workflow runs on the tag. It
    first checks the tag itself (CHANGELOG.md must have a section for the version, and the
-   tagged commit must be on `main`) and runs every block except security-dependency-scan
-   at the tagged commit. Only when all of that is green does it build the release notes
-   with git-cliff, publish an immutable GitHub Release, and move the floating major tag
-   (`vN`) to the released commit.
+   tagged commit must be on `main`) and runs every block at the tagged commit. Only when
+   all of that is green does it build the release notes with git-cliff, publish an
+   immutable GitHub Release, and move the floating major tag (`vN`) to the released
+   commit.
 5. A failed check or verification opens an issue instead: the release is not published
    and the floating major tag does not move, so consumers on the floating major do not
    pick the version up. Fix forward and cut the next version; full release tags are

@@ -1,0 +1,6 @@
+# Used by the self-test to prove the config input: the fixture's only package is ignored.
+[[PackageOverrides]]
+name = "lodash"
+ecosystem = "npm"
+ignore = true
+reason = "Self-test fixture."

@@ -1,41 +1,44 @@
-# Scan project dependencies for known vulnerabilities with OWASP Dependency-Check. Standalone
-# by design: a different trigger profile from CI (callers usually add a weekly schedule to
-# catch newly disclosed CVEs), a long runtime, and a large NVD database cached across runs.
-# Needs a free NVD API key (https://nvd.nist.gov/developers/request-an-api-key) so the
-# database update is fast and reliable.
+# Scan dependency lockfiles and manifests for known vulnerabilities with OSV-Scanner. It
+# reads the files and asks the OSV.dev database about the exact package versions, so there
+# is no vulnerability database to download, no API key, and no cache to warm. Named by
+# purpose, not tool, so the scanner can change without a consumer-breaking rename.
+# osv-scanner is version pinned and checksum verified through the catalog's
+# install-pinned-tool action. Callers usually run it on pull requests and on a weekly
+# schedule, to catch advisories published after a change merged.
 name: security-dependency-scan
 
 on:
   workflow_call:
     inputs:
-      project:
-        description: Project name shown in the report. Defaults to the repository name.
-        type: string
-        default: ""
       scan-path:
-        description: Path to scan, relative to the repository root.
+        description: Directory scanned recursively for lockfiles and manifests, relative to the repository root.
         type: string
         default: "."
-      fail-on-cvss:
-        description: Fail if a vulnerability at or above this CVSS score is found.
-        type: number
-        default: 7
-      format:
-        description: Report format (HTML, JSON, SARIF, ALL).
-        type: string
-        default: HTML
-      suppression:
-        description: Path to a suppression file, relative to the repository root. Empty for none.
+      lockfiles:
+        description: >-
+          Lockfiles to scan instead of scan-path, one path per line, relative to the
+          repository root. Prefix a path with its format and a colon
+          (package-lock.json:path/to/file) when the file name does not show the format.
         type: string
         default: ""
-      enable-experimental:
-        description: Enable experimental analyzers.
+      config:
+        description: >-
+          Path to an osv-scanner.toml applied to every scanned file, relative to the
+          repository root. Empty uses the osv-scanner.toml next to each scanned file, if any.
+        type: string
+        default: ""
+      fail-on-vuln:
+        description: Fail the run when a vulnerability is found that the config does not ignore.
         type: boolean
         default: true
-    secrets:
-      NVD_API_KEY:
-        description: NVD API key used for the vulnerability database update.
-        required: true
+      artifact-name:
+        description: Name of the uploaded JSON report. Must be unique per workflow run when the block is called more than once.
+        type: string
+        default: dependency-scan-report
+    outputs:
+      vulnerability-count:
+        description: Number of distinct advisories found, after the config's ignores.
+        value: ${{ jobs.scan.outputs.vulnerability-count }}
 
 permissions:
   contents: read
@@ -44,60 +47,89 @@ jobs:
   scan:
     name: dependency scan
     runs-on: ubuntu-24.04
-    # A cold NVD cache makes the database update slow; generous but bounded.
-    timeout-minutes: 45
+    timeout-minutes: 10
+    outputs:
+      vulnerability-count: ${{ steps.scan.outputs.count }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: NVD cache key (weekly rotation)
-        id: nvd
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-      - name: Cache the NVD database
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # The catalog's own source, checked out at the exact commit of this workflow file,
+      # so the block and the install action can never drift apart.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          path: ~/dependency-check-data
-          key: nvd-${{ runner.os }}-${{ steps.nvd.outputs.week }}
-          restore-keys: nvd-${{ runner.os }}-
-      - name: Run OWASP Dependency-Check
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .catalog
+          sparse-checkout: actions
+          persist-credentials: false
+      - name: Install osv-scanner
+        uses: ./.catalog/actions/install-pinned-tool
+        with:
+          tool: osv-scanner
+      # Keep the scanned tree equal to the caller's repository.
+      - name: Remove the catalog checkout
+        run: rm -rf .catalog
+      - name: Scan dependencies
+        id: scan
         env:
-          # owasp/dependency-check 12.2.2
-          IMAGE: owasp/dependency-check@sha256:ad169904106250816059f113d374d63a49a7cb0fd2c5e476d05c4fb814cc77b9
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-          # github.repository, not github.event.repository.name: the event payload has no
-          # repository object on some triggers (schedule), which would yield an empty name.
-          PROJECT: ${{ inputs.project || github.repository }}
           SCAN_PATH: ${{ inputs.scan-path }}
-          FORMAT: ${{ inputs.format }}
-          FAIL_ON_CVSS: ${{ inputs.fail-on-cvss }}
-          SUPPRESSION: ${{ inputs.suppression }}
-          EXPERIMENTAL: ${{ inputs.enable-experimental }}
+          LOCKFILES: ${{ inputs.lockfiles }}
+          CONFIG: ${{ inputs.config }}
         run: |
-          if [ -z "$NVD_API_KEY" ]; then
-            echo "::error::NVD_API_KEY secret is not set. Request a free key at https://nvd.nist.gov/developers/request-an-api-key so the NVD update is fast and reliable."
-            exit 1
+          args=(scan source --format json --output-file osv-results.json)
+          if [ -n "$CONFIG" ]; then args+=(--config "$CONFIG"); fi
+          if [ -n "$LOCKFILES" ]; then
+            while IFS= read -r lockfile; do
+              if [ -n "$lockfile" ]; then args+=(--lockfile "$lockfile"); fi
+            done <<<"$LOCKFILES"
+          else
+            args+=(--recursive "$SCAN_PATH")
           fi
-          mkdir -p "$HOME/dependency-check-data" reports
-          # The key travels through a read-only property file, not the docker run argv,
-          # so it never appears in the runner's process table.
-          umask 077
-          printf 'nvd.api.key=%s\n' "$NVD_API_KEY" > "$HOME/dc.properties"
-          trap 'rm -f "$HOME/dc.properties"' EXIT
-          args=(--scan "/src/$SCAN_PATH" --project "$PROJECT" --format "$FORMAT" --out /report --failOnCVSS "$FAIL_ON_CVSS" --propertyfile /run/dc.properties)
-          if [ "$EXPERIMENTAL" = "true" ]; then args+=(--enableExperimental); fi
-          if [ -n "$SUPPRESSION" ]; then args+=(--suppression "/src/$SUPPRESSION"); fi
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "$HOME/dependency-check-data:/usr/share/dependency-check/data" \
-            -v "$HOME/dc.properties:/run/dc.properties:ro" \
-            -v "$PWD:/src" \
-            -v "$PWD/reports:/report" \
-            "$IMAGE" \
-            "${args[@]}"
+          # Exit code 1 means vulnerabilities were found; the gate below decides what that
+          # means. Anything else, such as 128 when no lockfile was found, is an error.
+          status=0
+          osv-scanner "${args[@]}" || status=$?
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error::osv-scanner exited with $status."
+            exit "$status"
+          fi
+          # One group is one advisory with its aliases (a GHSA and its CVE), counted once.
+          count="$(jq '[.results[]?.packages[]?.groups[]?] | length' osv-results.json)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+      - name: Write the summary
+        env:
+          COUNT: ${{ steps.scan.outputs.count }}
+        run: |
+          {
+            echo "## Dependency scan"
+            echo
+            if [ "$COUNT" = "0" ]; then
+              echo "No known vulnerabilities."
+            else
+              echo "$COUNT advisories found."
+              echo
+              echo "| Advisory | Severity | Package | Version | File |"
+              echo "|----------|----------|---------|---------|------|"
+              jq -r --arg ws "$GITHUB_WORKSPACE/" '
+                .results[]? | (.source.path | ltrimstr($ws)) as $file
+                | .packages[]? | .package as $pkg
+                | .groups[]?
+                | "| \(.ids | join(", ")) | \(.max_severity // "") | \($pkg.name) | \($pkg.version) | \($file) |"
+              ' osv-results.json
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload the report
         if: ${{ always() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dependency-check-report
-          path: reports
+          name: ${{ inputs.artifact-name }}
+          path: osv-results.json
           if-no-files-found: ignore
+      - name: Fail on vulnerabilities
+        if: ${{ inputs.fail-on-vuln && steps.scan.outputs.count != '0' }}
+        env:
+          COUNT: ${{ steps.scan.outputs.count }}
+        run: |
+          echo "::error::$COUNT known vulnerabilities; see the job summary. Fix them, or ignore a reviewed finding in osv-scanner.toml."
+          exit 1
