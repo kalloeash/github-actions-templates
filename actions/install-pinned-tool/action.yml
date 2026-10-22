@@ -8,8 +8,8 @@ description: >-
 inputs:
   tool:
     description: >-
-      Binary to install. actionlint, gitleaks, and trivy come from the pin table; any
-      other name requires url and a checksum.
+      Binary to install. actionlint, gitleaks, osv-scanner, and trivy come from the pin
+      table; any other name requires url and a checksum.
     required: true
   url:
     description: >-
@@ -67,6 +67,10 @@ runs:
             gitleaks) # v8.30.1
               URL="https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
               SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+              ;;
+            osv-scanner) # v2.7.0
+              URL="https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64"
+              SHA256="160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b"
               ;;
             trivy) # v0.72.0
               URL="https://github.com/aquasecurity/trivy/releases/download/v0.72.0/trivy_0.72.0_Linux-64bit.tar.gz"

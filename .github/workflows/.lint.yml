@@ -42,3 +42,9 @@ jobs:
   secret-scan:
     name: secret scan
     uses: ./.github/workflows/security-secret-scan.yml
+
+  # The same for the dependency scan: the catalog scans its own lockfiles with its own
+  # block.
+  dependency-scan:
+    name: dependency scan
+    uses: ./.github/workflows/security-dependency-scan.yml

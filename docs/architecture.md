@@ -14,9 +14,9 @@ A composite action is a bundle of steps that runs inside another job. It is used
 mechanics like "set up the runtime and restore the cache". A composite action lives in its
 own folder with an `action.yml` and its own README. The catalog holds one:
 [install-pinned-tool](../actions/install-pinned-tool/README.md), which downloads a release
-asset, verifies its checksum, and installs one binary from it. It arrived when a fourth workflow
-repeated the same install steps, which is the threshold this section always set: a
-composite action appears when blocks need the same steps inside their jobs, not before.
+asset, verifies its checksum, and installs one binary from it. It arrived when a fourth
+workflow repeated the same install steps, which is the threshold this section always set:
+a composite action appears when blocks need the same steps inside their jobs, not before.
 
 A block references the action at the exact commit of its own workflow file, through
 `job.workflow_repository` and `job.workflow_sha`, so a block and the action version it
@@ -81,27 +81,27 @@ documentation tells callers exactly what to grant per mode.
 
 - actionlint and zizmor check every workflow file, in pre-commit and in CI, so interface
   and syntax errors are caught before a block is tagged.
-- The self-test workflow (`.test.yml`) runs on pushes to `main` and on every pull
-  request. It calls each
-  block through its same-repo path against a small fixture project under `tests/`, so a
-  change that breaks a block fails in the catalog itself, before it is tagged.
-  security-secret-scan is not called from `.test.yml` because the lint workflow consumes
-  it directly, which exercises it on the same events. security-dependency-scan is the one
-  block not exercised in the catalog: it needs an NVD API key and a long first run, so its
-  proof stays with its consumers. terraform-plan and terraform-apply are exercised as a
-  chained pair against a local-backend fixture, which proves the plan, the artifact and
-  metadata hand-off, and the apply without credentials; their Azure login path cannot
-  run against a fixture, so it stays consumer-proven, like the dependency scan.
-  Failure paths of reusable workflows are not asserted in `.test.yml`, because a job that
-  calls a reusable workflow does not support `continue-on-error`, so an expected failure
-  would fail the whole run; refusal logic therefore lives in early guard steps inside the
-  blocks, and the composite action's failure paths are asserted step-level instead.
+- The self-test workflow (`.test.yml`) runs on pushes to `main` and on every pull request.
+  It calls each block through its same-repo path against a small fixture project under
+  `tests/`, so a change that breaks a block fails in the catalog itself, before it is
+  tagged. security-secret-scan and security-dependency-scan are not called plainly from
+  `.test.yml`: the lint workflow consumes them directly, against the catalog itself, which
+  exercises them on the same events. For the dependency scan that proves the clean path;
+  `.test.yml` adds a fixture lockfile with a known advisory and asserts that the scan
+  reports it and that a config ignores it. terraform-plan and terraform-apply are
+  exercised as a chained pair against a local-backend fixture, which proves the plan, the
+  artifact and metadata hand-off, and the apply without credentials; their Azure login
+  path cannot run against a fixture, so it stays consumer-proven. Failure paths of
+  reusable workflows are not asserted in `.test.yml`, because a job that calls a reusable
+  workflow does not support `continue-on-error`, so an expected failure would fail the
+  whole run; refusal logic therefore lives in early guard steps inside the blocks, and the
+  composite action's failure paths are asserted step-level instead.
 - Release verification runs inside the release workflow (`.release.yml`), on the version
   tag push. On that event, same-repo references resolve to the tagged commit, so every
-  block except security-dependency-scan executes at the exact code consumers pin, and the
-  GitHub Release and the floating major tag wait for the outcome. It includes
-  security-secret-scan, which the pull-request layer leaves to the lint workflow, because
-  the lint workflow does not run on tags. A failure opens an issue and nothing is
+  block executes at the exact code consumers pin, and the GitHub Release and the floating
+  major tag wait for the outcome. It includes security-secret-scan and
+  security-dependency-scan, which the pull-request layer leaves to the lint workflow,
+  because the lint workflow does not run on tags. A failure opens an issue and nothing is
   published, so a consumer tracking the floating major or the release page can never
   receive an unverified release.
 - gitleaks scans for secrets: on staged changes locally, and over the full history in CI,

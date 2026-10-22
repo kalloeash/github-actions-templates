@@ -41,16 +41,16 @@ projects that publish bare binaries. `archive-member` does not apply and is reje
 ```yaml
 - uses: ./actions/install-pinned-tool
   with:
-    tool: osv-scanner
-    url: https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
-    sha256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
+    tool: jq
+    url: https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64
+    sha256: b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f
 ```
 
 ## Inputs
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `tool` | required | Binary to install. Table tools: `actionlint`, `gitleaks`, `trivy`. Any other name requires `url` and a checksum. |
+| `tool` | required | Binary to install. Table tools: `actionlint`, `gitleaks`, `osv-scanner`, `trivy`. Any other name requires `url` and a checksum. |
 | `url` | none | Release asset URL. Overrides the pin table. `.tar.gz` and `.tgz` URLs are archives; any other URL is the binary itself. |
 | `sha256` | none | SHA-256 checksum of the asset. Required with `url` unless `sha512` is given. |
 | `sha512` | none | SHA-512 checksum, for releases that publish SHA-512 values. |

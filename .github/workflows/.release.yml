@@ -1,8 +1,8 @@
 # Internal release pipeline. On a vX.Y.Z tag push the check-tag job and the verification
 # jobs run first: check-tag catches the manual-step mistakes (a tag whose version has no
 # changelog section, a tag on a commit that is not on main), and the verification jobs run
-# every block except security-dependency-scan at the exact code consumers pin, against
-# the same fixtures the self-tests use (docs/architecture.md, testing section). Only when
+# every block at the exact code consumers pin, against the same fixtures the self-tests use
+# (docs/architecture.md, testing section). Only when
 # all of them are green does the release job build the notes with git-cliff, publish the
 # immutable GitHub Release, and move the floating major tag (for example v0) to the
 # released commit. The version tag itself exists from the push, but the release page and
@@ -12,8 +12,9 @@
 # Verification and publication share one workflow on purpose: a chained design cannot
 # work, because the release is created with the default GITHUB_TOKEN, and events created
 # with that token never trigger other workflows.
-# security-secret-scan runs here even though .test.yml leaves it to the lint workflow,
-# because the lint workflow does not run on tags. The floating major carries no release of
+# security-secret-scan and the scan of the catalog's own lockfiles run here even though
+# .test.yml leaves them to the lint workflow, because the lint workflow does not run on
+# tags. The floating major carries no release of
 # its own, so it stays movable. Not consumable by other repositories.
 name: release
 
@@ -122,9 +123,64 @@ jobs:
     name: secret-scan
     uses: ./.github/workflows/security-secret-scan.yml
 
+  dependency-scan:
+    name: dependency scan
+    uses: ./.github/workflows/security-dependency-scan.yml
+
+  dependency-scan-finds:
+    name: dependency scan finds an advisory
+    uses: ./.github/workflows/security-dependency-scan.yml
+    with:
+      lockfiles: package-lock.json:tests/dependency-scan/vulnerable-lock.json
+      fail-on-vuln: false
+      artifact-name: dependency-scan-finds
+
+  dependency-scan-ignores:
+    name: dependency scan applies the config
+    uses: ./.github/workflows/security-dependency-scan.yml
+    with:
+      lockfiles: package-lock.json:tests/dependency-scan/vulnerable-lock.json
+      config: tests/dependency-scan/ignore.toml
+      artifact-name: dependency-scan-ignores
+
+  dependency-scan-results:
+    name: dependency scan results
+    needs: [dependency-scan-finds, dependency-scan-ignores]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Assert the counts
+        env:
+          FOUND: ${{ needs.dependency-scan-finds.outputs.vulnerability-count }}
+          IGNORED: ${{ needs.dependency-scan-ignores.outputs.vulnerability-count }}
+        run: |
+          if [ "${FOUND:-0}" -lt 1 ]; then
+            echo "::error::the vulnerable fixture reported no advisories."
+            exit 1
+          fi
+          if [ "$IGNORED" != "0" ]; then
+            echo "::error::the config left $IGNORED advisories."
+            exit 1
+          fi
+          echo "the fixture reported $FOUND advisories and the config ignored all of them."
+
   release:
     name: release
-    needs: [check-tag, node, dotnet, docker, terraform, terraform-plan, terraform-apply, precommit, iac, secret-scan]
+    needs:
+      - check-tag
+      - node
+      - dotnet
+      - docker
+      - terraform
+      - terraform-plan
+      - terraform-apply
+      - precommit
+      - iac
+      - secret-scan
+      - dependency-scan
+      - dependency-scan-finds
+      - dependency-scan-ignores
+      - dependency-scan-results
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # contents: write creates the GitHub Release and moves the floating major tag.
@@ -176,7 +232,21 @@ jobs:
 
   report:
     name: report a failed verification
-    needs: [check-tag, node, dotnet, docker, terraform, terraform-plan, terraform-apply, precommit, iac, secret-scan]
+    needs:
+      - check-tag
+      - node
+      - dotnet
+      - docker
+      - terraform
+      - terraform-plan
+      - terraform-apply
+      - precommit
+      - iac
+      - secret-scan
+      - dependency-scan
+      - dependency-scan-finds
+      - dependency-scan-ignores
+      - dependency-scan-results
     if: ${{ failure() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
