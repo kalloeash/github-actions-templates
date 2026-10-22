@@ -52,8 +52,8 @@ plugin "terraform" {
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `terraform-version` | `1.15.8` | Terraform version passed to setup-terraform. Pinned in the block, bumped centrally; override to match your project. |
-| `tflint-version` | `v0.63.1` | tflint version passed to setup-tflint. Pinned in the block, bumped centrally; override to match your project. |
+| `terraform-version` | `1.16.6` | Terraform version passed to setup-terraform. Pinned in the block, bumped centrally; override to match your project. |
+| `tflint-version` | `v0.64.0` | tflint version passed to setup-tflint. Pinned in the block, bumped centrally; override to match your project. |
 | `directories` | `.` | Newline-separated list of root configuration directories to validate. |
 
 ## Permissions

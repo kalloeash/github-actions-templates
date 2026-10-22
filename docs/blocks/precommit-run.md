@@ -34,7 +34,7 @@ jobs:
 
 | Name | Default | Description |
 |------|---------|-------------|
-| `python-version` | `3.13` | Python version passed to actions/setup-python. |
+| `python-version` | `3.14` | Python version passed to actions/setup-python. |
 | `config` | `.pre-commit-config.yaml` | pre-commit configuration file. |
 
 ## Permissions

@@ -163,7 +163,7 @@ one retry.
 | Name | Default | Description |
 |------|---------|-------------|
 | `working-directory` | `.` | Root configuration directory to plan. |
-| `terraform-version` | `1.15.8` | Terraform version passed to setup-terraform. Pinned in the block, bumped centrally; override to match your project. |
+| `terraform-version` | `1.16.6` | Terraform version passed to setup-terraform. Pinned in the block, bumped centrally; override to match your project. |
 | `backend-config` | empty | Backend config file passed to `init`, relative to `working-directory`. Empty skips the flag. |
 | `variables` | empty | Newline-separated variable assignments in tfvars syntax, written to an auto-loaded tfvars file before planning. Non-secret values only. |
 | `lock` | `false` | Take the state lock during plan. A speculative plan only reads state. Locking needs write access on the state blob, which the read-only plan identity above does not have. |
